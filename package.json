@@ -9,6 +9,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter @oneiroi/web dev",
+    "dev:host": "pnpm --filter @oneiroi/web dev:host",
+    "preview:host": "pnpm --filter @oneiroi/web preview:host",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
