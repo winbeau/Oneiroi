@@ -51,7 +51,7 @@ pnpm dev:host
 scripts/deploy-web-pi.sh --mode preview --host 0.0.0.0 --port 4173
 ```
 
-前端复刻与部署方案见 [`docs/frontend-replication-plan.md`](./docs/frontend-replication-plan.md)。
+前端复刻与部署方案见 [`docs/frontend-replication-plan.md`](./docs/frontend-replication-plan.md)。LTX Desktop 启发的动态 1–4 张 H100、显式热加载/释放和前端兼容方案见 [`docs/ltx-desktop-inspired-backend-plan.md`](./docs/ltx-desktop-inspired-backend-plan.md)。
 
 ## 质量检查
 

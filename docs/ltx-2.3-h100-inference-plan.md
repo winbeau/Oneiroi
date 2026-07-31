@@ -1,6 +1,8 @@
 # LTX-2.3 在 H100 上的推理启动计划
 
-> 目标：以最少变量、最短路径，在 H100 的 GPU 0 上完成一条可复现的 LTX-2.3 图生视频（I2V）推理；验证后再接入 Oneiroi Runner，并扩展到 4 个固定 GPU Worker。
+> 目标：以最少变量、最短路径，在 H100 的单张 GPU 上完成一条可复现的 LTX-2.3 图生视频（I2V）推理；验证后再接入 Oneiroi Runner。
+>
+> 更新：固定 GPU 0–3 / 固定 2 Fast + 2 HQ 的早期设想已由动态空闲卡、显式热加载/释放方案取代，见 [`ltx-desktop-inspired-backend-plan.md`](./ltx-desktop-inspired-backend-plan.md)。
 
 ## 1. 结论先行
 
@@ -23,11 +25,12 @@
 
 - P0：H100 完成官方 LTX-2.3 I2V 基准任务；
 - P1：把已验证的单卡命令封装为一个受控 Fast Runner；
-- 后续资源划分：
-  - GPU 0：`fast-0`，LTX-2.3 Distilled；
-  - GPU 1：`fast-1`，LTX-2.3 Distilled；
-  - GPU 2：`hq-0`，LTX-2.3 两阶段 HQ；
-  - GPU 3：`hq-1`，LTX-2.3 两阶段 HQ。
+- 后续资源划分由热加载时的 GPU inventory 决定，不假设连续 index：
+  - 默认请求最多 4 张真实空闲 H100；
+  - 4 卡：2 Fast + 2 HQ；
+  - 3 卡：2 Fast + 1 HQ；
+  - 2 卡：1 Fast + 1 HQ；
+  - 1 卡：仅 Fast，HQ 禁用。
 
 ## 3. 启动策略
 
@@ -321,8 +324,8 @@ Smoke test 验收：
 5. 输出写入任务专属目录；
 6. 逐阶段报告 `preparing → generating → encoding`；
 7. 捕获 OOM、输入错误、模型加载失败和编码失败；
-8. 先启动 `fast-0/GPU 0`，稳定后复制 `fast-1/GPU 1`；
-9. HQ adapter 独立部署到 GPU 2、3，不与 Fast Runner 共用进程。
+8. 先在一张动态选出的空闲 GPU 上完成 Fast Model Worker，稳定后扩展到 1–4 张卡；
+9. HQ adapter 使用独立 profile/Model Worker，不在任务间与 Fast pipeline 原地交换；实际物理 GPU 由 Gateway 租约决定。
 
 Runner 启动边界：
 
