@@ -11,7 +11,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 INVOCATION_DIR="$PWD"
 
-DEFAULT_PROMPT="A cinematic shot transitions smoothly from the first keyframe to the last keyframe. Natural subject motion, coherent details, stable composition, realistic lighting, smooth camera movement, synchronized ambient audio, no added dialogue."
+DEFAULT_PROMPT_FILE="$PROJECT_ROOT/assets/book-transition-prompt.txt"
+if [[ -f "$DEFAULT_PROMPT_FILE" ]]; then
+    DEFAULT_PROMPT="$(<"$DEFAULT_PROMPT_FILE")"
+else
+    DEFAULT_PROMPT="A woman in white pajamas opens the hidden headboard cabinet, reveals the books, and begins taking one book while the camera and bedroom remain stable."
+fi
 
 GPU="${ONEIROI_LTX_GPU:-0}"
 QUALITY="${ONEIROI_LTX_QUALITY:-720p}"
@@ -115,8 +120,8 @@ for example ONEIROI_LTX_GPU, ONEIROI_LTX_QUALITY, ONEIROI_LTX_DURATION,
 ONEIROI_LTX_FIRST_FRAME, ONEIROI_LTX_QUANTIZATION, and ONEIROI_LTX_OFFLOAD.
 
 Examples:
-  # Repository assets, GPU 0, 720p, approximately 5 seconds
-  scripts/run-ltx-2.3.sh --prompt "A woman turns toward the camera as the wind moves her hair."
+  # Repository book-opening keyframes and prompt, GPU 0, 720p, approximately 5 seconds
+  scripts/run-ltx-2.3.sh
 
   # GPU 3, model-safe 1080p, approximately 8 seconds, CPU offload
   scripts/run-ltx-2.3.sh --gpu 3 --quality 1080p --duration 8 --offload cpu \
