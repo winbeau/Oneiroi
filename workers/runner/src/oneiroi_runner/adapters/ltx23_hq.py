@@ -53,7 +53,7 @@ class Ltx23HqAdapter:
             quantization=quantization,
             registry=self._registry,
             offload_mode=OffloadMode(spec.offload),
-            alloc_trim_strategy=AllocatorTrimStrategy.DEFER,
+            alloc_trim_strategy=AllocatorTrimStrategy.TRIM,
         )
         self.spec = spec
         self.load_count += 1
