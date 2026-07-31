@@ -15,9 +15,12 @@ from oneiroi_common.compute import (
     ProfileTier,
     ReleasePolicy,
     SelectionMode,
+    allocated_gpu_count,
     profile_plan_for_count,
 )
+from oneiroi_gateway.redis.leases import InMemoryLeaseStore, LeaseStore
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService
+from oneiroi_gateway.services.session_events import SessionEventService
 
 
 def utc_now() -> str:
@@ -71,9 +74,20 @@ class RecordingComputeBackend:
 
 
 class ComputeSessionService:
-    def __init__(self, inventory: GpuInventoryService, backend: ComputeBackend) -> None:
+    def __init__(
+        self,
+        inventory: GpuInventoryService,
+        backend: ComputeBackend,
+        *,
+        leases: LeaseStore | None = None,
+        events: SessionEventService | None = None,
+        lease_ttl_seconds: float = 60,
+    ) -> None:
         self.inventory = inventory
         self.backend = backend
+        self.leases = leases or InMemoryLeaseStore()
+        self.events = events or SessionEventService()
+        self.lease_ttl_seconds = lease_ttl_seconds
         self.sessions: dict[str, ComputeSessionSnapshot] = {}
         self.idempotency: dict[tuple[str, str], tuple[str, str]] = {}
 
@@ -98,6 +112,8 @@ class ComputeSessionService:
         eligible = [gpu for gpu in inventory.gpus if gpu.eligible]
         if payload.selection_mode is SelectionMode.MANUAL:
             requested_ids = list(dict.fromkeys(payload.gpu_ids))
+            if not requested_ids:
+                raise ValueError("MANUAL_GPU_IDS_REQUIRED")
             available_by_id = {gpu.id: gpu for gpu in eligible}
             if any(gpu_id not in available_by_id for gpu_id in requested_ids):
                 raise ValueError("GPU_NOT_ELIGIBLE")
@@ -112,59 +128,98 @@ class ComputeSessionService:
                 )
             )
 
-        # M2 deliberately proves one safe GPU before M3 expands the allocator to four.
-        selected = eligible[: min(payload.requested_gpu_count, 1)]
-        if not selected:
-            raise RuntimeError("NO_ELIGIBLE_GPU")
-        if not payload.allow_partial and len(selected) < payload.requested_gpu_count:
-            raise RuntimeError("PARTIAL_ALLOCATION_DISABLED")
+        requested = payload.requested_gpu_count
+        expected = allocated_gpu_count(requested, len(eligible), payload.allow_partial)
+        if expected == 0:
+            reason = "NO_ELIGIBLE_GPU" if not eligible else "PARTIAL_ALLOCATION_DISABLED"
+            raise RuntimeError(reason)
 
         session_id = f"compute-{uuid4().hex[:16]}"
+        acquired = await self.leases.acquire(
+            [gpu.id for gpu in eligible],
+            requested,
+            session_id,
+            ttl_seconds=self.lease_ttl_seconds,
+            allow_partial=payload.allow_partial,
+        )
+        if not acquired:
+            raise RuntimeError("NO_ELIGIBLE_GPU")
+        acquired_ids = {lease.gpu_id for lease in acquired}
+        selected = [gpu for gpu in eligible if gpu.id in acquired_ids]
+        if not payload.allow_partial and len(selected) < requested:
+            await self.leases.release_session(session_id)
+            raise RuntimeError("PARTIAL_ALLOCATION_DISABLED")
+
+        plan = profile_plan_for_count(len(selected))
+        profiles = [ProfileTier.FAST] * plan.fast + [ProfileTier.HQ] * plan.hq
         slots = [
             ComputeSlot(
                 id=f"slot-{uuid4().hex[:16]}",
                 gpuId=gpu.id,
                 physicalIndex=gpu.physical_index,
-                state=GpuState.LOADING,
-                profile=ProfileTier.FAST,
-                loadStage="starting_worker",
-                loadProgress=5,
+                state=GpuState.RESERVED,
+                profile=profile,
+                loadStage="reserving_gpu",
+                loadProgress=0,
             )
-            for gpu in selected
+            for gpu, profile in zip(selected, profiles, strict=True)
         ]
         session = ComputeSessionSnapshot(
             id=session_id,
             ownerId=owner_id,
-            state=ComputeSessionState.LOADING,
-            requestedGpuCount=payload.requested_gpu_count,
+            state=ComputeSessionState.ALLOCATING,
+            requestedGpuCount=requested,
             allocatedGpuCount=len(selected),
             selectionMode=payload.selection_mode,
             profilePolicy=payload.profile_policy,
             allowPartial=payload.allow_partial,
-            profilePlan=profile_plan_for_count(len(selected)),
+            profilePlan=plan,
             slots=slots,
             createdAt=utc_now(),
         )
         self.sessions[session_id] = session
         if idempotency_key:
             self.idempotency[(owner_id, idempotency_key)] = (fingerprint, session_id)
+        await self._emit_snapshot(session, "compute.session.updated")
 
-        try:
-            for gpu, slot in zip(selected, session.slots, strict=True):
-                await self.backend.load_slot(session.id, slot.id, gpu, ProfileTier.FAST)
+        failures = 0
+        session.state = ComputeSessionState.LOADING
+        for gpu, slot in zip(selected, session.slots, strict=True):
+            slot.state = GpuState.LOADING
+            slot.load_stage = "starting_worker"
+            slot.load_progress = 5
+            await self._emit_slot(session, slot)
+            try:
+                await self.backend.load_slot(
+                    session.id,
+                    slot.id,
+                    gpu,
+                    slot.profile or ProfileTier.FAST,
+                )
                 slot.state = GpuState.READY
                 slot.load_stage = "ready"
                 slot.load_progress = 100
+            except Exception as exc:
+                failures += 1
+                slot.state = GpuState.ERROR
+                slot.last_error = str(exc)
+            await self._emit_slot(session, slot)
+
+        ready_count = sum(slot.state is GpuState.READY for slot in session.slots)
+        if ready_count == len(session.slots) and len(session.slots) == requested:
             session.state = ComputeSessionState.READY
             session.ready_at = utc_now()
-        except Exception as exc:
-            for slot in session.slots:
-                if slot.state is not GpuState.READY:
-                    slot.state = GpuState.ERROR
-                    slot.last_error = str(exc)
+            await self._emit_snapshot(session, "compute.session.ready")
+        elif ready_count:
+            session.state = ComputeSessionState.DEGRADED
+            session.ready_at = utc_now()
+            session.error_code = "PARTIAL_ALLOCATION" if not failures else "MODEL_LOAD_FAILED"
+            await self._emit_snapshot(session, "compute.session.degraded")
+        else:
             session.state = ComputeSessionState.FAILED
             session.error_code = "MODEL_LOAD_FAILED"
-            session.error_message = str(exc)
+            session.error_message = "no allocated slot became ready"
+            await self._emit_snapshot(session, "compute.session.failed")
         return session
 
     def get(self, owner_id: str, session_id: str) -> ComputeSessionSnapshot:
@@ -186,19 +241,66 @@ class ComputeSessionService:
             return session
 
         session.state = ComputeSessionState.DRAINING
+        await self._emit_snapshot(session, "compute.session.updated")
         session.state = ComputeSessionState.RELEASING
         all_released = True
         for slot in session.slots:
             slot.state = GpuState.UNLOADING
+            await self._emit_slot(session, slot)
             released = await self.backend.release_slot(session.id, slot)
             all_released = all_released and released
             slot.state = GpuState.EMPTY if released else GpuState.ERROR
             if not released:
                 slot.last_error = "GPU_MEMORY_NOT_RELEASED"
+            await self._emit_slot(session, slot)
         if all_released:
+            await self.leases.release_session(session.id)
             session.state = ComputeSessionState.RELEASED
             session.released_at = utc_now()
+            await self._emit_snapshot(session, "compute.session.released")
         else:
             session.state = ComputeSessionState.FAILED
             session.error_code = "GPU_MEMORY_NOT_RELEASED"
+            await self._emit_snapshot(session, "compute.session.failed")
         return session
+
+    async def reconcile_stale_gpus(self, stale_gpu_ids: set[str]) -> list[str]:
+        affected: list[str] = []
+        for session in self.sessions.values():
+            changed = False
+            for slot in session.slots:
+                if slot.gpu_id not in stale_gpu_ids or slot.state in {
+                    GpuState.EMPTY,
+                    GpuState.ERROR,
+                }:
+                    continue
+                slot.state = GpuState.ERROR
+                slot.last_error = "RUNNER_HEARTBEAT_LOST"
+                await self.leases.release_gpu(slot.gpu_id, session.id)
+                await self._emit_slot(session, slot)
+                changed = True
+            if changed:
+                affected.append(session.id)
+                if any(slot.state is GpuState.READY for slot in session.slots):
+                    session.state = ComputeSessionState.DEGRADED
+                    session.error_code = "RUNNER_HEARTBEAT_LOST"
+                    await self._emit_snapshot(session, "compute.session.degraded")
+                else:
+                    session.state = ComputeSessionState.FAILED
+                    session.error_code = "RUNNER_HEARTBEAT_LOST"
+                    await self._emit_snapshot(session, "compute.session.failed")
+        return affected
+
+    async def _emit_snapshot(self, session: ComputeSessionSnapshot, event_type: str) -> None:
+        await self.events.emit(
+            session.id,
+            event_type,
+            session.model_dump(mode="json", by_alias=True),
+        )
+
+    async def _emit_slot(self, session: ComputeSessionSnapshot, slot: ComputeSlot) -> None:
+        await self.events.emit(
+            session.id,
+            "compute.slot.updated",
+            slot.model_dump(mode="json", by_alias=True),
+        )

@@ -1,6 +1,9 @@
+import json
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, status
+from fastapi.responses import StreamingResponse
 
 from oneiroi_common.compute import (
     ComputeSessionCreate,
@@ -53,6 +56,32 @@ def create_compute_router(
             return sessions.get(user, session_id)
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+    @router.get("/sessions/{session_id}/events")
+    async def session_events(
+        session_id: str,
+        user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
+        last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    ) -> StreamingResponse:
+        try:
+            sessions.get(user, session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+
+        async def stream() -> AsyncIterator[str]:
+            after_id = int(last_event_id or 0)
+            async for event in sessions.events.stream(session_id, after_id):
+                if event.event_type == "heartbeat":
+                    yield ": heartbeat\n\n"
+                    continue
+                payload = json.dumps(event.payload, ensure_ascii=False, separators=(",", ":"))
+                yield f"id: {event.id}\nevent: {event.event_type}\ndata: {payload}\n\n"
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @router.post(
         "/sessions/{session_id}/release",

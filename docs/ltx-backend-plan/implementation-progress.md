@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | P0 | M1 资源可见 | 已完成 | `e5af69e` |
 | P1 | M2 Fast 生命周期 | 已完成 | `b3956fd`、`4e5299f`、`201c1bc`、`e13bc0d` |
-| P2 | M3 动态调度 | 未开始 | — |
+| P2 | M3 动态调度 | 已完成 | M3 本文件所在提交 |
 | P3 | M4 HQ 能力 | 未开始 | — |
 | P4 | M5 真实任务 | 未开始 | — |
 | P5 | M6 前端闭环 | 未开始 | — |
@@ -74,5 +74,30 @@ H100 真实验证（2026-07-31）：
 - release 未触发 TERM/KILL；子进程退出、显存回到 478 MiB、无 Oneiroi orphan process、选中 GPU 前后均无外部 compute PID；
 - 首轮直接调用遗漏 `torch.inference_mode()` 曾触发 OOM；该缺陷由 `201c1bc` 修复，失败运行的 emergency release 和最终 NVML 检查均确认显存已回收；
 - `e13bc0d` 将核心 Fast transformer 跨任务常驻；ready 显存和后续任务耗时证实任务间未重新构造 transformer。
+
+未解决阻塞：无。
+
+## M3：1–4 卡动态租约与 Compute session SSE
+
+已验证实现：
+
+- `InMemoryLeaseStore` 与 `RedisLeaseStore` 均以 GPU UUID 为键，使用 session ID、fencing token 和 TTL；Redis 获取使用单个 Lua 脚本保证候选选择与建租约原子化；
+- 自动选卡按显存、利用率、温度和 UUID 稳定排序；手动模式只接受当前 inventory 中 eligible 的 UUID；
+- 实际分配遵循 `min(requested, eligible, 4)`，`allowPartial=false` 时不足请求数不创建部分租约；
+- balanced profile 对 1–4 卡分别生成 1F/0H、1F/1H、2F/1H、2F/2H，不要求 physical index 连续；
+- 请求 4 卡但只有 physical index 0、2、7 可用的测试返回 3 卡、2 Fast + 1 HQ，外部占用 index 3 未被租约；
+- 并发 session 竞争同一 UUID 的测试只允许一个成功，不产生双租约；
+- Compute session 事件保存单调 event ID，SSE 支持 `Last-Event-ID` 后重放 slot/session ready、degraded、release 事件；
+- heartbeat 丢失 reconcile 将具体 slot 标记为 `RUNNER_HEARTBEAT_LOST`，只清除对应 GPU lease，并将 session 置为 degraded 或 failed；
+- Redis directed stream 命名固定为 `oneiroi:slot:{slot_id}:control`、`oneiroi:slot:{slot_id}:jobs` 和 `oneiroi:job:{job_id}:events`。
+
+自动化检查：
+
+- `uv run ruff check .`：通过；
+- `uv run pytest`：33 项通过、Redis 集成项在普通运行中按环境开关跳过；
+- `ONEIROI_TEST_REDIS=1 uv run pytest services/gateway/tests/integration/test_redis_leases.py`：1 项通过，使用既有 `127.0.0.1:6379`；
+- `git diff --check`：通过。
+
+H100 只读复核：测试后再次读取实时 inventory；本阶段未加载新 Model Worker、未租约或触碰外部占用卡。
 
 未解决阻塞：无。

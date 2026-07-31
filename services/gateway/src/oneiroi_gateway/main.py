@@ -2,6 +2,7 @@ from fastapi import APIRouter, FastAPI
 
 from oneiroi_common.api import ServiceHealth
 from oneiroi_common.jobs import QueueTier
+from oneiroi_gateway.redis.leases import RedisLeaseStore
 from oneiroi_gateway.routes.compute import create_compute_router
 from oneiroi_gateway.services.compute_sessions import (
     ComputeSessionService,
@@ -39,6 +40,11 @@ def create_app(
         compute_session_service = ComputeSessionService(
             inventory_service,
             UnavailableComputeBackend(),
+            leases=(
+                RedisLeaseStore(app_settings.redis_url)
+                if app_settings.redis_leases_enabled
+                else None
+            ),
         )
     app = FastAPI(
         title="Oneiroi Studio Gateway",
