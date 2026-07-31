@@ -6,8 +6,8 @@
 
 | 阶段 | 里程碑 | 状态 | 对应提交 |
 | --- | --- | --- | --- |
-| P0 | M1 资源可见 | 已完成 | M1 本文件所在提交 |
-| P1 | M2 Fast 生命周期 | 未开始 | — |
+| P0 | M1 资源可见 | 已完成 | `e5af69e` |
+| P1 | M2 Fast 生命周期 | 进行中（本地验收通过，待 H100） | M2 代码提交 |
 | P2 | M3 动态调度 | 未开始 | — |
 | P3 | M4 HQ 能力 | 未开始 | — |
 | P4 | M5 真实任务 | 未开始 | — |
@@ -41,5 +41,28 @@ H100 只读 inventory（2026-07-31）：
 - physical index 3–6 分别使用约 39989、50093、39621、50115 MiB，必须判定为不可分配；
 - 候选 UUID（截断）：`GPU-7f893bc3…`、`GPU-5cae32f8…`、`GPU-6ff18a65…`、`GPU-2376be1e…`；
 - 未启动 Model Worker，未创建 CUDA context，未修改任何外部进程。
+
+未解决阻塞：无。
+
+## M2：单卡 Fast Model Worker 生命周期
+
+已验证实现：
+
+- Supervisor 本身不导入 Torch/LTX，只在显式 `load()` 后启动绑定单 GPU UUID 的 Model Worker 子进程；
+- Model Worker 完成 adapter load、组件初始化、自检/synchronize 后才发布 ready；
+- `Ltx23FastAdapter` 直接构造官方 `DistilledPipeline` 并在同一子进程中跨任务复用；
+- fake adapter 在本地生成隔离任务目录和真实 H.264 MP4，用于不占 GPU 的生命周期测试；
+- 同一 worker 连续执行 3 个任务时 PID 不变、adapter load count 保持 1；
+- release 默认等待运行锁，随后请求子进程退出，超时依次 TERM/KILL，并以子进程退出和显存 verifier 同时通过作为成功条件；
+- Gateway 已提供单卡 `POST/GET/release` Compute session API、owner 隔离和 Idempotency-Key payload 冲突检查；
+- `cancel_running` 未确认时由后端拒绝，任务目录和 cancel marker 均受服务端 storage root 约束。
+
+本地自动化检查：
+
+- `uv run ruff check .`：通过；
+- `uv run pytest`：26 项通过；
+- `git diff --check`：通过。
+
+H100 验证：待 M2 代码推送并由目标主机 Git 同步后执行首次单卡真实热加载、3 次最小 Fast I2V 和进程级释放；在结果完成前本里程碑保持“进行中”。
 
 未解决阻塞：无。

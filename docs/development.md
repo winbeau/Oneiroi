@@ -60,9 +60,10 @@ journalctl --user -u oneiroi-studio.service -f
 Runner 骨架可用以下方式启动；它当前只维护进程生命周期，尚未连接真实 LTX 管线：
 
 ```bash
-ONEIROI_RUNNER_NAME=fast-0 \
+ONEIROI_RUNNER_NAME=runner-0 \
 ONEIROI_RUNNER_QUEUE=fast \
-ONEIROI_RUNNER_GPU_DEVICE=0 \
+ONEIROI_RUNNER_GPU_ID=GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
+ONEIROI_RUNNER_PHYSICAL_INDEX=0 \
 uv run oneiroi-runner
 ```
 

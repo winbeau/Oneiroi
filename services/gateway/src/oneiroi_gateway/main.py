@@ -3,6 +3,10 @@ from fastapi import APIRouter, FastAPI
 from oneiroi_common.api import ServiceHealth
 from oneiroi_common.jobs import QueueTier
 from oneiroi_gateway.routes.compute import create_compute_router
+from oneiroi_gateway.services.compute_sessions import (
+    ComputeSessionService,
+    UnavailableComputeBackend,
+)
 from oneiroi_gateway.services.gpu_inventory import (
     GpuInventoryService,
     InMemoryInventoryProvider,
@@ -17,6 +21,7 @@ def create_app(
     settings: GatewaySettings | None = None,
     *,
     inventory_service: GpuInventoryService | None = None,
+    compute_session_service: ComputeSessionService | None = None,
 ) -> FastAPI:
     app_settings = settings or get_settings()
     if inventory_service is None:
@@ -30,6 +35,11 @@ def create_app(
             else InMemoryInventoryProvider()
         )
         inventory_service = GpuInventoryService(provider)
+    if compute_session_service is None:
+        compute_session_service = ComputeSessionService(
+            inventory_service,
+            UnavailableComputeBackend(),
+        )
     app = FastAPI(
         title="Oneiroi Studio Gateway",
         version=__version__,
@@ -48,7 +58,7 @@ def create_app(
         return {"queues": [tier.value for tier in QueueTier]}
 
     app.include_router(system_router)
-    app.include_router(create_compute_router(inventory_service))
+    app.include_router(create_compute_router(inventory_service, compute_session_service))
     return app
 
 
