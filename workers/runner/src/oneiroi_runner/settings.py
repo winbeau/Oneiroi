@@ -16,8 +16,9 @@ class RunnerSettings(BaseSettings):
     environment: str = "development"
     redis_url: str = "redis://127.0.0.1:6379/0"
     queue: QueueTier = QueueTier.FAST
-    name: str = "fast-0"
-    gpu_device: int = Field(default=0, ge=0)
+    name: str = "runner-unconfigured"
+    gpu_id: str = "GPU-unconfigured"
+    physical_index: int = Field(default=0, ge=0)
     heartbeat_seconds: float = Field(default=10, gt=0, le=60)
 
 

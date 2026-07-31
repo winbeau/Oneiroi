@@ -5,6 +5,7 @@ description = "Fixed-GPU inference runner for Oneiroi Studio"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "oneiroi-common",
+    "nvidia-ml-py>=12.560,<13",
     "pydantic-settings>=2.7.1,<3",
     "redis>=5.2.1,<7",
     "structlog>=25.1.0,<26",

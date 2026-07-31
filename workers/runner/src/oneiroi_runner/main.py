@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 def bind_gpu(settings: RunnerSettings) -> None:
-    expected = str(settings.gpu_device)
+    expected = settings.gpu_id
     current = os.environ.get("CUDA_VISIBLE_DEVICES")
     if current is not None and current != expected:
         raise RuntimeError(
-            f"CUDA_VISIBLE_DEVICES={current!r} conflicts with configured GPU {expected!r}"
+            f"CUDA_VISIBLE_DEVICES={current!r} conflicts with configured GPU UUID {expected!r}"
         )
     os.environ["CUDA_VISIBLE_DEVICES"] = expected
 
@@ -30,7 +30,7 @@ async def serve(settings: RunnerSettings) -> None:
         "runner started: name=%s queue=%s gpu=%s",
         settings.name,
         settings.queue.value,
-        settings.gpu_device,
+        settings.gpu_id,
     )
     await stop_event.wait()
     logger.info("runner stopped: name=%s", settings.name)
