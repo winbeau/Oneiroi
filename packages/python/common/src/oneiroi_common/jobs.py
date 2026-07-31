@@ -23,3 +23,17 @@ class JobStatus(StrEnum):
     @property
     def is_terminal(self) -> bool:
         return self in {self.SUCCEEDED, self.CANCELLED, self.FAILED}
+
+
+ACTIVE_JOB_STATUSES = frozenset(
+    {
+        JobStatus.UPLOADED,
+        JobStatus.QUEUED,
+        JobStatus.ASSIGNED,
+        JobStatus.LOADING_MODEL,
+        JobStatus.PREPARING,
+        JobStatus.GENERATING,
+        JobStatus.ENCODING,
+        JobStatus.CANCEL_REQUESTED,
+    }
+)

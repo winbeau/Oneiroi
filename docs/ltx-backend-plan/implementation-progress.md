@@ -9,8 +9,8 @@
 | P0 | M1 资源可见 | 已完成 | `e5af69e` |
 | P1 | M2 Fast 生命周期 | 已完成 | `b3956fd`、`4e5299f`、`201c1bc`、`e13bc0d` |
 | P2 | M3 动态调度 | 已完成 | `3304dba` |
-| P3 | M4 HQ 能力 | 已完成 | `00dacc9`、`375fc95`、`fcae104` |
-| P4 | M5 真实任务 | 未开始 | — |
+| P3 | M4 HQ 能力 | 已完成 | `00dacc9`、`375fc95`、`fcae104`、`af38b3a` |
+| P4 | M5 真实任务 | 已完成 | M5 本文件所在提交 |
 | P5 | M6 前端闭环 | 未开始 | — |
 | P6 | M7 生产加固 | 未开始 | — |
 | P7 | M8 私网 API 验证 | 未开始 | — |
@@ -128,5 +128,33 @@ H100 真实验证（2026-07-31）：
 - 输出 `/data/oneiroi/ltx-2.3/outputs/oneiroi-worker-m4/m4-hq-production/output/result.mp4`，H.264/AAC，5.041667 秒，1929491 字节；结果与既有 176 秒 HQ CLI 冷路径基线处于同一量级；
 - HQ 使用 `AllocatorTrimStrategy.TRIM`，因为保留两个阶段的构建 state 会在 1080p stage-2 触发 OOM；该策略不降级 profile，仍使用 Dev checkpoint + HQ sampler，只在阶段间回收构建显存；
 - release 未触发 TERM/KILL，子进程退出、NVML 回到 478 MiB、无 orphan PID；两次 OOM 调整过程均执行 emergency release 并确认显存回收。
+
+未解决阻塞：无。
+
+## M5：PostgreSQL 任务、Redis 定向流、薄 BFF 与真实资产
+
+已验证实现：
+
+- Gateway 成为 Conversation canonical state，提供 POST/GET/list/幂等 PUT；非 owner 和不存在资源统一 404，Pydantic 对空/超长 title 返回 422；
+- 新增 multipart image upload，限制 MIME/大小并用 Pillow 解码验证，客户端只能引用 asset ID，不能提交服务器路径；
+- `jobs`、`job_attempts`、`job_events` 和 `assets` repository 同时提供内存测试实现与 SQLAlchemy/PostgreSQL 实现；retry 在同一 job 下新增 attempt，不覆盖历史 attempt/event；
+- Alembic `0001_dynamic_backend` 创建 conversations、compute_sessions、gpu_slots、model_profiles、assets、jobs、job_attempts 和 job_events；
+- Gateway 先从 ready profile slot 做单任务互斥 reservation，再写入 `oneiroi:slot:{slot_id}:jobs`；Redis 不是最终业务状态源；
+- Job API 覆盖 create/list/get/SSE/cancel/retry/file/manifest；状态区分 `cancel_requested` 与 `cancelled`，事件先持久化再通知 SSE；
+- `/file` 返回授权后的 `video/mp4`，`/manifest` 独立返回且过滤内部 `*path` 字段；owner 隔离覆盖 snapshot、asset 和下载；
+- 本地 fake executor 仅由测试显式注入并生成可探测 H.264 MP4；生产默认 executor 为 `None`，不会静默模拟成功；
+- Pi BFF 删除 `StudioStore` 生产接线和 timer 模拟，改为显式 Gateway 路由、身份转发、上传上限、SSE/下载代理和 503 受控映射。
+
+自动化与基础设施检查：
+
+- `uv run ruff check .`：通过；
+- `uv run pytest`：47 项通过、2 项外部依赖集成按环境开关跳过；
+- PostgreSQL + Redis 开关全部启用时：49 项通过；
+- `alembic upgrade head` 在 `127.0.0.1:5432` 的 PostgreSQL 16 成功，`alembic current` 为 `0001_dynamic_backend (head)`；
+- Redis Lua lease 集成测试在 `127.0.0.1:6379` 通过；测试使用唯一 key 并清理；
+- Gateway/BFF 进程内完整链验证 Conversation PUT、upload、Compute session、job SSE、授权 MP4、manifest、cancel 和 retry；
+- `git diff --check`：通过。
+
+真实资产基线：M2 Fast 和 M4 HQ 已输出真实 LTX MP4；M5 的真实 Gateway → Model Worker HTTP 链在最终 M8 私网验证中执行，不以测试 fake 结果替代该最终验收。
 
 未解决阻塞：无。

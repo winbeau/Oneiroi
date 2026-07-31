@@ -14,8 +14,10 @@ class GatewaySettings(BaseSettings):
 
     environment: str = "development"
     database_url: str = "postgresql+asyncpg://oneiroi:oneiroi-local@127.0.0.1:5432/oneiroi"
+    persistence_enabled: bool = False
     redis_url: str = "redis://127.0.0.1:6379/0"
     redis_leases_enabled: bool = False
+    redis_job_streams_enabled: bool = False
     storage_root: Path = Path(".data/storage")
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
     nvml_inventory_enabled: bool = False

@@ -1,13 +1,18 @@
 from fastapi import APIRouter, FastAPI
 
+from oneiroi_bff.gateway_client import GatewayClient
+from oneiroi_bff.proxy import create_proxy_router
 from oneiroi_bff.settings import BffSettings, get_settings
-from oneiroi_bff.studio import StudioStore, create_studio_router
 from oneiroi_common.api import ServiceHealth
 
 __version__ = "0.1.0"
 
 
-def create_app(settings: BffSettings | None = None) -> FastAPI:
+def create_app(
+    settings: BffSettings | None = None,
+    *,
+    gateway_app: FastAPI | None = None,
+) -> FastAPI:
     app_settings = settings or get_settings()
     app = FastAPI(
         title="Oneiroi Studio BFF",
@@ -17,7 +22,6 @@ def create_app(settings: BffSettings | None = None) -> FastAPI:
     )
 
     system_router = APIRouter(tags=["system"])
-    studio_store = StudioStore()
 
     @system_router.get("/healthz", response_model=ServiceHealth)
     async def healthz() -> ServiceHealth:
@@ -28,7 +32,7 @@ def create_app(settings: BffSettings | None = None) -> FastAPI:
         return ServiceHealth(service="bff", version=__version__)
 
     app.include_router(system_router)
-    app.include_router(create_studio_router(studio_store))
+    app.include_router(create_proxy_router(GatewayClient(app_settings, gateway_app), app_settings))
     return app
 
 

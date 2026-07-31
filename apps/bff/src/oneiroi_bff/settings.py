@@ -13,7 +13,8 @@ class BffSettings(BaseSettings):
 
     environment: str = "development"
     gateway_base_url: HttpUrl = HttpUrl("http://127.0.0.1:8010")
-    request_timeout_seconds: float = Field(default=30, gt=0, le=300)
+    request_timeout_seconds: float = Field(default=300, gt=0, le=7_200)
+    max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
 
 
 @lru_cache
