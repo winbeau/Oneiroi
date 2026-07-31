@@ -20,6 +20,10 @@ def _adapter(adapter_name: str) -> Any:
         from oneiroi_runner.adapters.ltx23_fast import Ltx23FastAdapter
 
         return Ltx23FastAdapter()
+    if adapter_name == "ltx23-hq":
+        from oneiroi_runner.adapters.ltx23_hq import Ltx23HqAdapter
+
+        return Ltx23HqAdapter()
     raise ValueError(f"unknown adapter: {adapter_name}")
 
 

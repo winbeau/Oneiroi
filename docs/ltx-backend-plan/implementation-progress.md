@@ -8,8 +8,8 @@
 | --- | --- | --- | --- |
 | P0 | M1 资源可见 | 已完成 | `e5af69e` |
 | P1 | M2 Fast 生命周期 | 已完成 | `b3956fd`、`4e5299f`、`201c1bc`、`e13bc0d` |
-| P2 | M3 动态调度 | 已完成 | M3 本文件所在提交 |
-| P3 | M4 HQ 能力 | 未开始 | — |
+| P2 | M3 动态调度 | 已完成 | `3304dba` |
+| P3 | M4 HQ 能力 | 进行中（本地验收通过，待 H100） | M4 代码提交 |
 | P4 | M5 真实任务 | 未开始 | — |
 | P5 | M6 前端闭环 | 未开始 | — |
 | P6 | M7 生产加固 | 未开始 | — |
@@ -99,5 +99,26 @@ H100 真实验证（2026-07-31）：
 - `git diff --check`：通过。
 
 H100 只读复核：测试后再次读取实时 inventory；本阶段未加载新 Model Worker、未租约或触碰外部占用卡。
+
+未解决阻塞：无。
+
+## M4：HQ profile、完整 PipelineSpec 与能力约束
+
+已验证实现：
+
+- `PipelineSpec` 改为不可变对象，identity 使用全部序列化字段的 SHA256；checkpoint、LoRA、Gemma revision、量化、offload、attention、compile 和 policy 任一变化都会生成新 identity；
+- Fast/HQ profile builder 分别固定 Distilled 与 Dev + Distilled LoRA 资产，不以单一 `fast/hq` 字符串作为缓存键；
+- `Ltx23HqAdapter` 只接受 HQ spec，HQ load/generate 失败保持 HQ 错误，不调用或降级到 Fast adapter；
+- HQ adapter 通过官方 `TI2VidTwoStagesHQPipeline`、Dev checkpoint、0.25/0.5 两阶段 LoRA 强度、fp8-cast 和固定 guider 参数执行；
+- `GET /v1/compute/capabilities` 返回 Fast/HQ 参数矩阵；一卡 session 的 HQ 原因固定为 `HQ_REQUIRES_AT_LEAST_2_GPUS`，两卡且 HQ slot ready 时才 available；
+- Capability service 提供后端强制 `require_profile` 校验，供 M5 Job API 在提交前执行。
+
+本地自动化检查：
+
+- `uv run ruff check .`：通过；
+- `uv run pytest`：38 项通过、1 项 Redis 集成按环境开关跳过；
+- `git diff --check`：通过。
+
+H100 验证：待代码推送后重新读取 eligible inventory，并在不影响外部任务的单张已租约 HQ slot 上执行真实 Dev/HQ warm-up、最小 I2V、MP4 探测和进程级释放；在完成前本里程碑保持“进行中”。
 
 未解决阻塞：无。

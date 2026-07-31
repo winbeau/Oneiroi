@@ -2,7 +2,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from oneiroi_common.compute import (
@@ -11,6 +11,7 @@ from oneiroi_common.compute import (
     ComputeSessionSnapshot,
     GpuInventoryResponse,
 )
+from oneiroi_gateway.services.capabilities import CapabilityService
 from oneiroi_gateway.services.compute_sessions import ComputeSessionService
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService
 
@@ -18,12 +19,26 @@ from oneiroi_gateway.services.gpu_inventory import GpuInventoryService
 def create_compute_router(
     inventory: GpuInventoryService,
     sessions: ComputeSessionService,
+    capabilities: CapabilityService,
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/compute", tags=["compute"])
 
     @router.get("/gpus", response_model=GpuInventoryResponse, response_model_by_alias=True)
     async def get_gpus() -> GpuInventoryResponse:
         return await inventory.snapshot()
+
+    @router.get("/capabilities")
+    async def get_capabilities(
+        session_id: Annotated[str | None, Query(alias="sessionId")] = None,
+        user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
+    ):
+        session = None
+        if session_id:
+            try:
+                session = sessions.get(user, session_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+        return capabilities.get(session)
 
     @router.post(
         "/sessions",

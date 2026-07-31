@@ -1,9 +1,13 @@
+import hashlib
+import json
 from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MAX_GPU_COUNT = 4
+FAST_PROFILE_ID = "ltx23-distilled-fast-v1"
+HQ_PROFILE_ID = "ltx23-dev-hq-v1"
 
 
 def to_camel(value: str) -> str:
@@ -101,6 +105,13 @@ class GpuInventoryResponse(ContractModel):
 
 
 class PipelineSpec(ContractModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+        frozen=True,
+    )
+
     profile_id: str
     tier: ProfileTier
     ltx_git_commit: str
@@ -120,7 +131,12 @@ class PipelineSpec(ContractModel):
 
     @property
     def identity(self) -> str:
-        return f"{self.profile_id}:{self.checkpoint_sha256}:{self.runtime_policy_version}"
+        payload = json.dumps(
+            self.model_dump(mode="json", by_alias=True),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode()).hexdigest()
 
 
 class ComputeSlot(ContractModel):
@@ -133,6 +149,21 @@ class ComputeSlot(ContractModel):
     load_progress: int = Field(default=0, ge=0, le=100)
     pipeline_spec_hash: str | None = None
     last_error: str | None = None
+
+
+class ProfileCapability(ContractModel):
+    id: str
+    tier: ProfileTier
+    available: bool
+    resolutions: list[str] = Field(default_factory=list)
+    durations: list[int] = Field(default_factory=list)
+    unavailable_reason: str | None = None
+
+
+class ComputeCapabilitiesResponse(ContractModel):
+    requested_default: int = 4
+    maximum_selectable: int = MAX_GPU_COUNT
+    profiles: list[ProfileCapability]
 
 
 class ComputeSessionCreate(ContractModel):

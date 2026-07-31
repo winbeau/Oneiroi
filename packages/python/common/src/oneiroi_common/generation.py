@@ -16,6 +16,7 @@ class InternalI2VRequest(ContractModel):
     num_frames: Annotated[int, Field(default=9, ge=1)]
     frame_rate: Annotated[float, Field(default=24, gt=0)]
     seed: int = 42
+    num_inference_steps: Annotated[int, Field(default=15, ge=1, le=100)] = 15
     enhance_prompt: bool = False
     first_frame_path: str | None = None
     last_frame_path: str | None = None
