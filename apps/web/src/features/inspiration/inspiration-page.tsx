@@ -1,9 +1,12 @@
-import { ArrowRight, ImageIcon, Search, WandSparkles } from "lucide-react";
+import { ArrowRight, ImageIcon, Search, Sparkles, WandSparkles } from "lucide-react";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Reveal } from "@/components/motion/reveal";
 import { Button } from "@/components/ui/button";
 import { inspirationTemplates } from "@/features/studio/templates";
+import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 
 const categories = ["全部", "团队灵感", "项目模板", "历史案例"] as const;
@@ -36,103 +39,268 @@ export function InspirationPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 py-8 md:px-8">
-      <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-sidebar)] px-5 py-7 md:px-8 md:py-9">
-        <div className="max-w-2xl">
-          <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--color-accent)]">
+    <main className="mx-auto w-full max-w-[1240px] px-4 pb-16 pt-5 md:px-7 md:pt-8">
+      <section className="paper-texture relative overflow-hidden rounded-[22px] border border-[var(--color-border)] bg-[var(--color-paper)] px-5 py-7 shadow-[var(--shadow-card)] md:px-9 md:py-10 lg:grid lg:min-h-[360px] lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:gap-10">
+        <div aria-hidden="true" className="dream-grid pointer-events-none absolute inset-0 opacity-55" />
+        <div className="relative z-10 max-w-2xl">
+          <motion.div
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 text-xs font-semibold tracking-[0.08em] text-[var(--color-accent)]"
+            initial={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.4, delay: 0.05, ease: [0.2, 0.8, 0.2, 1] }}
+          >
             <WandSparkles aria-hidden="true" className="size-4" />
-            团队灵感库
-          </div>
-          <h1 className="text-3xl font-semibold tracking-[-0.03em] md:text-4xl">
+            ONEIROI INSPIRATION
+          </motion.div>
+          <motion.h1
+            animate={{ opacity: 1, y: 0 }}
+            className="font-display mt-3 text-[34px] font-semibold leading-[1.14] tracking-[-0.035em] md:text-[48px] lg:text-[54px]"
+            initial={{ opacity: 0, y: 12 }}
+            transition={{ duration: 0.55, delay: 0.12, ease: [0.2, 0.8, 0.2, 1] }}
+          >
             从一个清晰想法开始
-          </h1>
-          <p className="mt-3 max-w-xl leading-7 text-[var(--color-text-muted)]">
-            浏览内部整理的镜头模板，直接把参考图、Prompt 和规格带入生成页。这里是创作起点，不是公开社区。
-          </p>
-        </div>
-        <div className="mt-6 flex max-w-xl items-center gap-2 rounded-lg border border-[var(--color-border-strong)] bg-white px-3 py-2">
-          <Search aria-hidden="true" className="size-4 text-[var(--color-text-faint)]" />
-          <label className="min-w-0 flex-1">
+          </motion.h1>
+          <motion.p
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 max-w-xl text-sm leading-7 text-[var(--color-text-muted)] md:text-[15px]"
+            initial={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.52, delay: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            浏览团队整理的镜头模板，把参考帧、Prompt 与规格带入生成页。这里保存的是可继续编辑的创作起点，而不是公开社区内容。
+          </motion.p>
+          <motion.label
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 flex h-12 max-w-xl items-center gap-3 rounded-xl border border-[var(--color-border-strong)] bg-white/88 px-3.5 shadow-[0_10px_28px_rgba(48,46,42,0.06)] transition focus-within:border-[var(--color-accent)]/45 focus-within:shadow-[0_14px_36px_rgba(75,68,136,0.10)]"
+            initial={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.5, delay: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <Search aria-hidden="true" className="size-4 text-[var(--color-text-faint)]" />
             <span className="sr-only">搜索灵感</span>
             <input
-              className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--color-text-faint)]"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--color-text-faint)]"
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索人物动作、产品镜头或案例"
               value={query}
             />
-          </label>
+            {query && (
+              <button
+                className="rounded px-1.5 py-1 text-[10px] text-[var(--color-text-faint)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
+                onClick={() => setQuery("")}
+                type="button"
+              >
+                清除
+              </button>
+            )}
+          </motion.label>
+        </div>
+
+        <div className="relative z-10 mx-auto mt-8 hidden h-[270px] w-full max-w-[430px] lg:block">
+          <motion.div
+            animate={{ opacity: 1, x: 0, rotate: -4 }}
+            className="absolute left-0 top-7 aspect-[4/3] w-[62%] overflow-hidden rounded-[18px] border-4 border-white bg-[var(--color-preview)] shadow-[0_24px_60px_rgba(48,46,42,0.17)]"
+            initial={{ opacity: 0, x: 24, rotate: -8 }}
+            transition={{ duration: 0.65, delay: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <img
+              alt="模板首帧示例"
+              className="size-full object-cover"
+              src={inspirationTemplates[0]?.previewUrl}
+            />
+            <span className="absolute bottom-3 left-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white backdrop-blur">
+              首帧
+            </span>
+          </motion.div>
+          <motion.div
+            animate={{ opacity: 1, x: 0, rotate: 5 }}
+            className="absolute bottom-2 right-0 aspect-[4/3] w-[62%] overflow-hidden rounded-[18px] border-4 border-white bg-[var(--color-preview)] shadow-[0_24px_60px_rgba(48,46,42,0.17)]"
+            initial={{ opacity: 0, x: 28, rotate: 9 }}
+            transition={{ duration: 0.65, delay: 0.36, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <img
+              alt="模板尾帧示例"
+              className="size-full object-cover"
+              src={inspirationTemplates[0]?.secondaryPreviewUrl}
+            />
+            <span className="absolute bottom-3 right-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white backdrop-blur">
+              尾帧
+            </span>
+          </motion.div>
+          <motion.span
+            animate={{ opacity: 1, scale: 1 }}
+            className="dream-orbit absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/82 text-[var(--color-accent)] shadow-[0_14px_34px_rgba(48,46,42,0.14)] backdrop-blur-xl"
+            initial={{ opacity: 0, scale: 0.75 }}
+            transition={{ duration: 0.45, delay: 0.62, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <Sparkles aria-hidden="true" className="size-5" />
+          </motion.span>
         </div>
       </section>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2" role="tablist" aria-label="灵感分类">
-        {categories.map((item) => (
-          <button
-            aria-selected={category === item}
-            className={`rounded-md px-3 py-1.5 text-sm transition ${
-              category === item
-                ? "bg-[var(--color-text)] text-white"
-                : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
-            }`}
-            key={item}
-            onClick={() => setCategory(item)}
-            role="tab"
-            type="button"
+      <div className="sticky top-[60px] z-30 -mx-2 mt-5 flex items-center gap-3 bg-[var(--color-canvas)]/88 px-2 py-3 backdrop-blur-xl">
+        <LayoutGroup id="inspiration-categories">
+          <div
+            aria-label="灵感分类"
+            className="hide-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto"
+            role="tablist"
           >
-            {item}
-          </button>
-        ))}
-        <span className="ml-auto text-xs text-[var(--color-text-faint)]">
+            {categories.map((item) => (
+              <button
+                aria-selected={category === item}
+                className={cn(
+                  "relative isolate shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  category === item
+                    ? "text-[var(--color-text)]"
+                    : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]",
+                )}
+                key={item}
+                onClick={() => setCategory(item)}
+                role="tab"
+                type="button"
+              >
+                {category === item && (
+                  <motion.span
+                    aria-hidden="true"
+                    className="absolute inset-0 -z-10 rounded-md bg-white shadow-[var(--shadow-card)] ring-1 ring-[var(--color-border)]"
+                    layoutId="inspiration-category-pill"
+                    transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
+                  />
+                )}
+                {item}
+              </button>
+            ))}
+          </div>
+        </LayoutGroup>
+        <span className="shrink-0 text-[11px] text-[var(--color-text-faint)]">
           {visibleTemplates.length} 个模板
         </span>
       </div>
 
-      <section aria-label="灵感模板列表" className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {visibleTemplates.map((template) => (
-          <article
-            className="group overflow-hidden rounded-xl border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]"
-            key={template.id}
-          >
-            <div className="relative aspect-video overflow-hidden bg-[var(--color-preview)]">
-              <img
-                alt={`${template.title}参考图`}
-                className="size-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                src={template.previewUrl}
-              />
-              {template.secondaryPreviewUrl && (
-                <div className="absolute bottom-3 right-3 flex size-14 overflow-hidden rounded-md border-2 border-white/80 shadow-lg">
-                  <img alt="尾帧缩略图" className="size-full object-cover" src={template.secondaryPreviewUrl} />
-                </div>
-              )}
-            </div>
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-medium text-[var(--color-accent)]">{template.category}</p>
-                  <h2 className="mt-1 font-medium">{template.title}</h2>
-                </div>
-                <ImageIcon aria-hidden="true" className="size-4 shrink-0 text-[var(--color-text-faint)]" />
-              </div>
-              <p className="mt-2 min-h-12 text-sm leading-6 text-[var(--color-text-muted)]">
-                {template.description}
-              </p>
-              <div className="mt-4 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
-                <span className="rounded bg-[var(--color-surface-muted)] px-2 py-1">{template.settings.ratio}</span>
-                <span className="rounded bg-[var(--color-surface-muted)] px-2 py-1">{template.settings.quality}</span>
-                <span className="rounded bg-[var(--color-surface-muted)] px-2 py-1">{template.settings.duration} 秒</span>
-              </div>
-              <Button className="mt-4 w-full" onClick={() => applySelectedTemplate(template)} size="sm" variant="secondary">
-                套用到生成
-                <ArrowRight aria-hidden="true" className="size-3.5" />
-              </Button>
-            </div>
-          </article>
-        ))}
-      </section>
+      <motion.section
+        aria-label="灵感模板列表"
+        className="mt-2 grid gap-4 md:grid-cols-2 lg:grid-cols-12"
+        layout
+      >
+        <AnimatePresence mode="popLayout">
+          {visibleTemplates.map((template, index) => {
+            const wide = index === 0 && visibleTemplates.length > 1;
+            const horizontal = index === 2 && visibleTemplates.length === 3;
+            return (
+              <Reveal
+                className={cn(
+                  "min-w-0 md:col-span-1",
+                  wide ? "lg:col-span-7" : horizontal ? "lg:col-span-12" : "lg:col-span-5",
+                )}
+                delay={index * 0.07}
+                key={template.id}
+              >
+                <motion.article
+                  className={cn(
+                    "group relative h-full overflow-hidden rounded-[18px] border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)] transition-[box-shadow,border-color] duration-300 hover:border-[var(--color-border-strong)] hover:shadow-[0_20px_55px_rgba(48,46,42,0.10)]",
+                    horizontal && "lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]",
+                  )}
+                  layout
+                  transition={{ layout: { duration: 0.36, ease: [0.2, 0.8, 0.2, 1] } }}
+                >
+                  <div
+                    className={cn(
+                      "relative overflow-hidden bg-[var(--color-preview)]",
+                      wide ? "aspect-[16/9]" : "aspect-[4/3]",
+                      horizontal && "lg:aspect-auto lg:min-h-[330px]",
+                    )}
+                  >
+                    <img
+                      alt={`${template.title}参考图`}
+                      className="size-full object-cover transition duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.025]"
+                      src={template.previewUrl}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/48 via-transparent to-transparent opacity-75 transition group-hover:opacity-90" />
+                    {template.secondaryPreviewUrl && (
+                      <div className="absolute bottom-4 right-4 flex size-16 overflow-hidden rounded-lg border-2 border-white/80 shadow-[0_12px_28px_rgba(0,0,0,0.22)] transition duration-300 group-hover:-translate-y-1 group-hover:rotate-1">
+                        <img
+                          alt="尾帧缩略图"
+                          className="size-full object-cover"
+                          src={template.secondaryPreviewUrl}
+                        />
+                      </div>
+                    )}
+                    <span className="absolute left-4 top-4 rounded-full bg-white/82 px-2.5 py-1 text-[10px] font-semibold text-[var(--color-text)] backdrop-blur-md">
+                      {template.category}
+                    </span>
+                    <Button
+                      className="absolute bottom-4 left-4 translate-y-2 opacity-0 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100 focus-visible:translate-y-0 focus-visible:opacity-100 max-lg:hidden"
+                      onClick={() => applySelectedTemplate(template)}
+                      size="sm"
+                      variant="primary"
+                    >
+                      套用到生成
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-col p-4.5 md:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-accent)]">
+                          {template.settings.quality} · {template.settings.ratio}
+                        </p>
+                        <h2 className="font-display mt-1.5 text-xl font-semibold leading-snug tracking-[-0.015em]">
+                          {template.title}
+                        </h2>
+                      </div>
+                      <ImageIcon
+                        aria-hidden="true"
+                        className="mt-1 size-4 shrink-0 text-[var(--color-text-faint)]"
+                      />
+                    </div>
+                    <p className="mt-2.5 text-sm leading-6 text-[var(--color-text-muted)]">
+                      {template.description}
+                    </p>
+                    <div className="mt-auto flex items-center gap-2 pt-4 text-[10px] text-[var(--color-text-faint)]">
+                      <span>{template.settings.resolution}</span>
+                      <span>·</span>
+                      <span>{template.settings.duration} 秒</span>
+                      <span>·</span>
+                      <span>I2V</span>
+                    </div>
+                    <Button
+                      className="mt-4 w-full lg:hidden"
+                      onClick={() => applySelectedTemplate(template)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      套用到生成
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
+                    </Button>
+                  </div>
+                </motion.article>
+              </Reveal>
+            );
+          })}
+        </AnimatePresence>
+      </motion.section>
 
       {visibleTemplates.length === 0 && (
-        <div className="mt-8 rounded-xl border border-dashed border-[var(--color-border-strong)] px-6 py-14 text-center text-sm text-[var(--color-text-muted)]">
-          没有匹配的内部模板，换个关键词试试。
-        </div>
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-5 rounded-[18px] border border-dashed border-[var(--color-border-strong)] bg-white/55 px-6 py-16 text-center"
+          initial={{ opacity: 0, y: 8 }}
+        >
+          <Search aria-hidden="true" className="mx-auto size-6 text-[var(--color-text-faint)]" />
+          <h2 className="font-display mt-3 text-lg font-semibold">没有匹配的镜头模板</h2>
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+            换个关键词，或者清除筛选继续浏览。
+          </p>
+          <Button
+            className="mt-4"
+            onClick={() => {
+              setQuery("");
+              setCategory("全部");
+            }}
+            size="sm"
+            variant="secondary"
+          >
+            清除筛选
+          </Button>
+        </motion.div>
       )}
     </main>
   );

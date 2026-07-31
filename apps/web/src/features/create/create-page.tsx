@@ -1,10 +1,12 @@
-import { PanelLeftOpen, Sparkles } from "lucide-react";
+import { PanelLeftOpen, Rows3, Sparkles } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { WorkspaceSidebar } from "@/components/layout/workspace-sidebar";
 import { Button } from "@/components/ui/button";
 import { AgentPanel } from "@/features/create/agent-panel";
 import { Composer } from "@/features/create/composer";
 import { JobCard } from "@/features/create/job-card";
+import { KeyframeStage } from "@/features/create/keyframe-stage";
 import { useStudioStore } from "@/store/studio-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
@@ -25,11 +27,11 @@ export function CreatePage() {
   ).length;
 
   return (
-    <main className="relative flex h-[calc(100vh-3.5rem)] min-h-[620px] overflow-hidden">
+    <main className="relative flex h-[calc(100vh-60px)] min-h-[620px] overflow-hidden">
       <WorkspaceSidebar />
 
-      <section className="flex min-w-0 flex-1 flex-col bg-white">
-        <header className="flex h-14 shrink-0 items-center border-b border-[var(--color-border)] px-4 md:px-5">
+      <section className="flex min-w-0 flex-1 flex-col bg-[var(--color-canvas)]">
+        <header className="flex h-[54px] shrink-0 items-center border-b border-[var(--color-border)]/80 bg-[var(--color-canvas)]/80 px-4 backdrop-blur-lg md:px-6">
           {!sidebarOpen && (
             <Button
               aria-label="展开会话栏"
@@ -42,54 +44,77 @@ export function CreatePage() {
             </Button>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-medium">
+            <h1 className="truncate text-sm font-semibold tracking-[-0.01em]">
               {activeConversation?.title ?? "未命名创作"}
             </h1>
-            <p className="text-xs text-[var(--color-text-faint)]">
+            <p className="mt-0.5 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-faint)]">
+              <span
+                className={`size-1.5 rounded-full ${
+                  runningCount > 0 ? "soft-pulse bg-[var(--color-accent)]" : "bg-[var(--color-border-strong)]"
+                }`}
+              />
               {runningCount > 0
-                ? `${runningCount} 个任务执行中`
+                ? `${runningCount} TASKS RUNNING`
                 : conversationJobs.length > 0
-                  ? `${conversationJobs.length} 条生成记录`
-                  : "草稿 · 尚未提交任务"}
+                  ? `${conversationJobs.length} GENERATIONS`
+                  : "DRAFT · READY"}
             </p>
           </div>
           <button
-            className="ml-auto rounded-md px-2 py-1 text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
             type="button"
           >
+            <Rows3 aria-hidden="true" className="size-3.5" />
             任务详情
           </button>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6 md:px-6 md:py-8">
+        <div className="scrollbar-notion flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-[1120px] flex-1 flex-col px-4 pb-2 pt-5 md:px-7 md:pt-7">
             <AgentPanel />
 
             {conversationJobs.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center py-12">
-                <div className="max-w-xl text-center">
-                  <div className="mx-auto grid size-11 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-sidebar)] text-[var(--color-accent)]">
-                    <Sparkles aria-hidden="true" className="size-5" />
-                  </div>
-                  <h2 className="mt-5 text-2xl font-semibold tracking-[-0.025em]">
-                    把两张关键帧变成一段连贯镜头
-                  </h2>
-                  <p className="mt-3 text-sm leading-6 text-[var(--color-text-muted)]">
-                    上传首帧和尾帧，描述人物动作、镜头和声音。提交后，这里会持续显示排队、模型准备、生成和编码状态。
-                  </p>
-                </div>
+              <div className="mt-4 flex flex-1 pb-3">
+                <KeyframeStage />
               </div>
             ) : (
-              <section aria-label="生成任务" className="mt-5 space-y-4 pb-6">
-                {conversationJobs.map((job) => (
-                  <JobCard job={job} key={job.id} />
-                ))}
+              <section aria-label="生成任务" className="mt-7 pb-5">
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="flex items-center gap-2 text-xs font-medium text-[var(--color-accent)]">
+                      <Sparkles aria-hidden="true" className="size-3.5" />
+                      CREATION TIMELINE
+                    </p>
+                    <h2 className="font-display mt-1.5 text-2xl font-semibold tracking-[-0.02em]">
+                      镜头正在成形
+                    </h2>
+                  </div>
+                  <p className="hidden text-xs text-[var(--color-text-faint)] sm:block">
+                    阶段状态会持续同步
+                  </p>
+                </div>
+                <AnimatePresence initial={false} mode="popLayout">
+                  <div className="space-y-4">
+                    {conversationJobs.map((job) => (
+                      <motion.div
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        initial={{ opacity: 0, y: 12 }}
+                        key={job.id}
+                        layout
+                        transition={{ duration: 0.38, ease: [0.2, 0.8, 0.2, 1] }}
+                      >
+                        <JobCard job={job} />
+                      </motion.div>
+                    ))}
+                  </div>
+                </AnimatePresence>
               </section>
             )}
           </div>
 
-          <div className="sticky bottom-0 z-10 bg-gradient-to-t from-white via-white to-transparent px-4 pb-4 pt-6 md:px-6 md:pb-6">
-            <div className="mx-auto max-w-4xl">
+          <div className="sticky bottom-0 z-20 mt-auto bg-gradient-to-t from-[var(--color-canvas)] via-[var(--color-canvas)]/96 to-transparent px-3 pb-3 pt-8 md:px-7 md:pb-5">
+            <div className="mx-auto max-w-[980px]">
               <Composer />
             </div>
           </div>

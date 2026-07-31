@@ -2,39 +2,79 @@
 
 :root {
   color-scheme: light;
-  font-family: "Inter Tight", "PingFang SC", "Microsoft YaHei", system-ui,
-    sans-serif;
+  font-family: "Inter Tight", "PingFang SC", "Microsoft YaHei", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
-  --color-canvas: #ffffff;
-  --color-sidebar: #f7f6f3;
-  --color-surface-muted: #f7f6f3;
-  --color-text: #37352f;
-  --color-text-muted: #787774;
-  --color-text-faint: #9b9a97;
-  --color-border: #edece9;
-  --color-border-strong: #dcdad4;
-  --color-accent: #2383e2;
-  --color-accent-hover: #1b6fbe;
-  --color-success: #0f7b6c;
-  --color-preview: #242424;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
+  --font-sans: "Inter Tight", "PingFang SC", "Microsoft YaHei", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Iowan Old Style", "Source Han Serif SC", "Songti SC",
+    "STSong", "Noto Serif CJK SC", Georgia, serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --color-canvas: #fbfaf8;
+  --color-paper: #ffffff;
+  --color-sidebar: #f6f4f0;
+  --color-surface-muted: #f4f2ee;
+  --color-surface-hover: #eeece7;
+  --color-text: #302e2a;
+  --color-text-muted: #716f69;
+  --color-text-faint: #a09d96;
+  --color-border: rgb(48 46 42 / 9%);
+  --color-border-strong: rgb(48 46 42 / 16%);
+  --color-accent: #665ccf;
+  --color-accent-hover: #574dbd;
+  --color-accent-soft: rgb(102 92 207 / 10%);
+  --color-accent-faint: rgb(102 92 207 / 6%);
+  --color-success: #24796b;
+  --color-success-soft: rgb(36 121 107 / 10%);
+  --color-warning: #a66b18;
+  --color-danger: #b84a4a;
+  --color-preview: #272523;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --shadow-card: 0 1px 2px rgb(48 46 42 / 4%);
+  --shadow-float: 0 18px 52px rgb(48 46 42 / 9%), 0 2px 8px rgb(48 46 42 / 5%);
+  --shadow-menu: 0 12px 32px rgb(48 46 42 / 12%), 0 1px 4px rgb(48 46 42 / 6%);
+
+  --ease-out-expo: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-fast: 140ms;
+  --motion-micro: 190ms;
+  --motion-layout: 320ms;
+  --motion-enter: 560ms;
 }
 
 * {
   border-color: var(--color-border);
+  box-sizing: border-box;
 }
 
 html {
+  min-width: 320px;
+  min-height: 100%;
   background: var(--color-canvas);
+  caret-color: transparent;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--color-canvas);
+  background:
+    radial-gradient(circle at 8% -10%, rgb(213 179 126 / 8%), transparent 27rem),
+    radial-gradient(circle at 92% 4%, rgb(102 92 207 / 7%), transparent 30rem),
+    var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 button,
@@ -44,13 +84,144 @@ select {
   font: inherit;
 }
 
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  caret-color: var(--color-text);
+}
+
 button,
+a,
 label[for] {
   -webkit-tap-highlight-color: transparent;
 }
 
+button,
+a {
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+a[href] {
+  cursor: pointer;
+}
+
 ::selection {
-  background: rgb(35 131 226 / 18%);
+  background: rgb(102 92 207 / 18%);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.paper-texture {
+  background-image:
+    radial-gradient(circle at 12% 12%, rgb(214 154 87 / 8%), transparent 28rem),
+    radial-gradient(circle at 88% 76%, rgb(102 92 207 / 7%), transparent 34rem),
+    radial-gradient(rgb(48 46 42 / 5%) 0.65px, transparent 0.65px);
+  background-size: auto, auto, 18px 18px;
+}
+
+.dream-grid {
+  background-image:
+    linear-gradient(to right, rgb(48 46 42 / 4%) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(48 46 42 / 4%) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+
+.glass-paper {
+  background: rgb(255 255 255 / 78%);
+  border: 1px solid rgb(255 255 255 / 68%);
+  box-shadow: inset 0 0 0 1px rgb(48 46 42 / 5%);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.scrollbar-notion::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-notion::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-notion::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.scrollbar-notion:hover::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  background-clip: padding-box;
+}
+
+.scrollbar-notion {
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.scrollbar-notion:hover {
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.frame-flow {
+  position: relative;
+  overflow: hidden;
+}
+
+.frame-flow::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(102 92 207 / 7%) 30%,
+    rgb(102 92 207 / 22%) 50%,
+    rgb(102 92 207 / 7%) 70%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: frame-flow 2.8s linear infinite;
+}
+
+.progress-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-shimmer::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 45%), transparent);
+  transform: translateX(-100%);
+  animation: progress-shimmer 1.6s ease-in-out infinite;
+}
+
+.dream-orbit {
+  animation: dream-orbit 8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.soft-pulse {
+  animation: soft-pulse 2.6s ease-in-out infinite;
 }
 
 .sr-only {
@@ -63,6 +234,40 @@ label[for] {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+@keyframes frame-flow {
+  to {
+    background-position: -220% 0;
+  }
+}
+
+@keyframes progress-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dream-orbit {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -5px, 0) rotate(2deg);
+  }
+}
+
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

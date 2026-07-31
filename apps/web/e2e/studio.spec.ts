@@ -18,6 +18,20 @@ test("template to generation to asset flow", async ({ page }) => {
   await expect(page.getByText(/生成视频/).first()).toBeVisible();
 });
 
+test("advanced controls and asset preview remain accessible", async ({ page }) => {
+  await page.goto("/create");
+
+  await page.getByRole("button", { name: "打开高级参数" }).click();
+  await expect(page.getByText("精确控制随机性、关键帧约束与显存策略。")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("link", { name: "资产" }).click();
+  await page.getByRole("button", { name: /^预览 / }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "关闭预览" }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+});
+
 test("mobile workspace sidebar can collapse and reopen", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chromium", "mobile-only interaction");
   await page.goto("/create");
