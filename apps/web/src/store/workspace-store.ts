@@ -7,7 +7,10 @@ type WorkspaceState = {
 };
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  sidebarOpen: true,
+  sidebarOpen:
+    typeof window === "undefined"
+      ? true
+      : window.matchMedia("(min-width: 768px)").matches,
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 }));

@@ -1,5 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { type PropsWithChildren, useState } from "react";
+import { type PropsWithChildren, useEffect, useState } from "react";
+
+import { useStudioStore } from "@/store/studio-store";
+
+function StudioRuntime() {
+  const resumePendingJobs = useStudioStore((state) => state.resumePendingJobs);
+
+  useEffect(() => {
+    resumePendingJobs();
+  }, [resumePendingJobs]);
+
+  return null;
+}
 
 export function AppProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -16,6 +28,9 @@ export function AppProviders({ children }: PropsWithChildren) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <StudioRuntime />
+      {children}
+    </QueryClientProvider>
   );
 }

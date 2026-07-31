@@ -36,7 +36,22 @@ uv run uvicorn oneiroi_bff.main:app --reload --port 8000
 pnpm dev
 ```
 
-Vite 开发服务器位于 `http://localhost:5173`，并将 `/v1` 与 `/healthz` 代理到 BFF。
+Vite 开发服务器位于 `http://localhost:5173`，并将 `/v1` 与 `/healthz` 代理到 BFF。BFF 未启动时，前端自动使用浏览器演示任务流。
+
+工作区内网访问：
+
+```bash
+pnpm dev:host
+# http://<本机内网IP>:5173
+```
+
+树莓派构建并监听所有接口：
+
+```bash
+scripts/deploy-web-pi.sh --mode preview --host 0.0.0.0 --port 4173
+```
+
+前端复刻与部署方案见 [`docs/frontend-replication-plan.md`](./docs/frontend-replication-plan.md)。
 
 ## 质量检查
 

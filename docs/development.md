@@ -35,6 +35,21 @@ pnpm dev
 - BFF health: `http://localhost:8000/healthz`
 - Gateway health: `http://localhost:8010/healthz`
 
+WebUI 会优先调用同源 BFF；BFF 未启动时自动退回浏览器内的演示任务流，仍可验收灵感模板、首尾帧、参数、任务阶段和资产复用。Prompt 包含 `[fail]` 时可测试可恢复失败卡片。
+
+工作区内网调试：
+
+```bash
+pnpm dev:host
+# http://<本机内网IP>:5173
+```
+
+树莓派部署/预览：
+
+```bash
+scripts/deploy-web-pi.sh --mode preview --host 0.0.0.0 --port 4173
+```
+
 Runner 骨架可用以下方式启动；它当前只维护进程生命周期，尚未连接真实 LTX 管线：
 
 ```bash
@@ -50,6 +65,7 @@ uv run oneiroi-runner
 pnpm check
 uv run ruff check .
 uv run pytest
+pnpm --filter @oneiroi/web e2e
 ```
 
 ## 5. 后续实现顺序
