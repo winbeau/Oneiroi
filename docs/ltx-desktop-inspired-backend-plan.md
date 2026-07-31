@@ -86,6 +86,12 @@ Model Worker 一个生命周期只驻留一个完整 `PipelineSpec`。profile �
 
 退出条件：所有异常均有明确状态、错误码、审计事件和恢复策略，不产生 GPU 双重分配或 orphan CUDA process。
 
+### P7：不暴露公网的 API 验证
+
+使用 ASGI client 和仅绑定 `127.0.0.1` 的临时服务完成 GET、POST、PUT、SSE 和下载测试；增加幂等 `PUT /v1/conversations/{conversation_id}`，并执行单卡 Compute session 私网热加载/释放 smoke test。
+
+退出条件：测试端口未监听公网接口，没有新增 Cloudflare/DNS/路由入口，GET/POST/PUT 自动化和 loopback smoke test 均通过，临时服务已关闭。
+
 ## 4. 里程碑实现摘要
 
 | 里程碑 | 主要交付 | 关键验收 |
@@ -97,6 +103,7 @@ Model Worker 一个生命周期只驻留一个完整 `PipelineSpec`。profile �
 | M5 真实任务 | PostgreSQL、Redis Streams、SSE、MP4 | 任务可恢复、取消、重试和下载 |
 | M6 前端闭环 | ComputeControl、GPU 弹窗、真实 Timeline | 用户完成完整资源与生成生命周期 |
 | M7 生产加固 | 故障注入、权限、审计、容量测试 | 无双租约、假成功或显存孤儿 |
+| M8 私网 API 验证 | ASGI + loopback GET/POST/PUT、监听面检查 | 无公网监听、幂等 PUT、临时服务关闭 |
 
 ## 5. 模块子计划索引
 
@@ -108,8 +115,20 @@ Model Worker 一个生命周期只驻留一个完整 `PipelineSpec`。profile �
 | [04 任务、API 与持久化](./ltx-backend-plan/04-job-api-and-persistence.md) | 定向调度、取消/重试、数据表、Compute/Job API、上传、资产和安全 | P2–P4 |
 | [05 前端兼容方案](./ltx-backend-plan/05-frontend-compatibility.md) | ComputeControl、选卡弹窗、Fast/HQ 约束、任务卡、释放交互和状态管理 | P5 |
 | [06 实施与验收](./ltx-backend-plan/06-implementation-and-validation.md) | 阶段详细任务、验收标准、可靠性与容量测试 | P0–P6 |
+| [07 私网 API 验证](./ltx-backend-plan/07-private-api-validation.md) | 不暴露公网的 GET/POST/PUT、Compute session smoke test 和监听面检查 | P7 |
+
+完整实现的新对话执行入口见 [`prompts/ltx-dynamic-h100-full-implementation.md`](./prompts/ltx-dynamic-h100-full-implementation.md)。
 
 ## 6. 稳定 API 边界
+
+Conversation API 增加幂等 PUT：
+
+```text
+POST /v1/conversations
+GET  /v1/conversations
+GET  /v1/conversations/{conversation_id}
+PUT  /v1/conversations/{conversation_id}
+```
 
 新增 Compute 资源 API：
 
@@ -149,6 +168,7 @@ GET  /v1/jobs/{job_id}/manifest
 10. 释放成功必须同时满足子进程退出、租约清除和 NVML 显存回落。
 11. BFF 保持薄层，不保存 GPU 或任务的 canonical state。
 12. 前端由后端 capabilities 驱动，生产环境禁止模拟成功 fallback。
+13. API smoke test 只使用 ASGI client、loopback 或批准的可信私网接口；禁止新增公网入口。
 
 ## 8. 文档维护规则
 

@@ -143,6 +143,27 @@ oneiroi:job:{job_id}:events
 
 所有浏览器 API 继续使用 `/v1`，由 BFF 显式代理。
 
+### Conversation CRUD 与幂等 PUT
+
+Conversation 的 canonical state 迁移到 Gateway，BFF 只做身份注入和显式代理：
+
+```http
+POST /v1/conversations
+GET  /v1/conversations
+GET  /v1/conversations/{conversation_id}
+PUT  /v1/conversations/{conversation_id}
+```
+
+`PUT` 完整替换当前允许修改的字段，首版只有 `title`：
+
+```json
+{
+  "title": "更新后的创作会话"
+}
+```
+
+重复提交相同 PUT 必须保持同一资源 ID，不创建新会话；非 owner 和不存在的资源都返回 404。该接口同时作为不暴露公网的 GET/POST/PUT 集成验证资源，详细测试边界见 [`07-private-api-validation.md`](./07-private-api-validation.md)。
+
 ### GPU inventory
 
 ```http
