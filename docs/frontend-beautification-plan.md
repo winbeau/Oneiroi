@@ -11,7 +11,7 @@
 | Phase C | 已完成 | 编辑式 Hero、叠帧展示、动态分类与非对称模板卡 |
 | Phase D | 已完成 | Keyframe Stage、Agent 命令条、悬浮 Composer、高级参数 Popover、任务时间线 |
 | Phase E | 已完成 | 资产作品墙、吸附筛选、布局动画与资产预览 Dialog |
-| Phase F | 进行中 | 完整检查、提交、推送与 `pi5` 部署 |
+| Phase F | 已完成 | 完整检查、提交、推送，并部署到 `pi5` 的 `0.0.0.0:4173` |
 
 ## 1. 改造目标
 
