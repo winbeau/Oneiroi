@@ -1,0 +1,44 @@
+[project]
+name = "oneiroi-studio"
+version = "0.1.0"
+description = "Oneiroi Studio Python workspace"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1,<1",
+    "pytest>=8.3.5,<9",
+    "pytest-asyncio>=0.25.3,<1",
+    "ruff>=0.9.10,<1",
+]
+
+[tool.uv.workspace]
+members = [
+    "apps/bff",
+    "services/gateway",
+    "workers/runner",
+    "packages/python/common",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = [
+    "apps/bff/src",
+    "services/gateway/src",
+    "workers/runner/src",
+    "packages/python/common/src",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = [
+    "apps/bff/tests",
+    "services/gateway/tests",
+    "workers/runner/tests",
+    "packages/python/common/tests",
+]

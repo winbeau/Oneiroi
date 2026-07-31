@@ -1,0 +1,11 @@
+# Copy to a host-only location and replace the placeholders.
+# Never commit the tunnel credentials JSON or token.
+tunnel: <tunnel-uuid>
+credentials-file: /etc/cloudflared/<tunnel-uuid>.json
+
+ingress:
+  - hostname: video.icthub.top
+    service: https://127.0.0.1:443
+    originRequest:
+      originServerName: video.icthub.top
+  - service: http_status:404

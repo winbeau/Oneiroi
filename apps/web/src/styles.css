@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  font-family: "Inter Tight", "PingFang SC", "Microsoft YaHei", system-ui,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --color-canvas: #ffffff;
+  --color-sidebar: #f7f6f3;
+  --color-surface-muted: #f7f6f3;
+  --color-text: #37352f;
+  --color-text-muted: #787774;
+  --color-text-faint: #9b9a97;
+  --color-border: #edece9;
+  --color-border-strong: #dcdad4;
+  --color-accent: #2383e2;
+  --color-accent-hover: #1b6fbe;
+  --color-success: #0f7b6c;
+  --color-preview: #242424;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  background: var(--color-canvas);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-canvas);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+label[for] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: rgb(35 131 226 / 18%);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "charliermarsh.ruff",
+    "bradlc.vscode-tailwindcss"
+  ]
+}
