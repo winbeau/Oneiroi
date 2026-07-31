@@ -97,28 +97,29 @@ class Ltx23FastAdapter:
         if is_cancelled():
             raise InterruptedError("generation cancelled before diffusion")
         progress("generating", 40, {"totalSteps": 11})
-        video, audio = self.pipeline(
-            prompt=request.prompt,
-            seed=request.seed,
-            height=request.height,
-            width=request.width,
-            num_frames=request.num_frames,
-            frame_rate=request.frame_rate,
-            images=images,
-            tiling_config=tiling_config,
-            enhance_prompt=request.enhance_prompt,
-        )
-        if is_cancelled():
-            raise InterruptedError("generation cancelled before encoding")
-        progress("encoding", 90, {})
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        encode_video(
-            video=video,
-            fps=int(request.frame_rate),
-            audio=audio,
-            output_path=str(output_path),
-            video_chunks_number=video_chunks,
-        )
+        with torch.inference_mode():
+            video, audio = self.pipeline(
+                prompt=request.prompt,
+                seed=request.seed,
+                height=request.height,
+                width=request.width,
+                num_frames=request.num_frames,
+                frame_rate=request.frame_rate,
+                images=images,
+                tiling_config=tiling_config,
+                enhance_prompt=request.enhance_prompt,
+            )
+            if is_cancelled():
+                raise InterruptedError("generation cancelled before encoding")
+            progress("encoding", 90, {})
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            encode_video(
+                video=video,
+                fps=int(request.frame_rate),
+                audio=audio,
+                output_path=str(output_path),
+                video_chunks_number=video_chunks,
+            )
         return {
             "profileId": self.spec.profile_id if self.spec else "unknown",
             "adapterLoadCount": self.load_count,

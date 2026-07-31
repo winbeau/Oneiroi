@@ -42,7 +42,7 @@ def worker_process_main(
     storage_root: str,
 ) -> None:
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
-    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
     writer = ArtifactWriter(Path(storage_root))
     adapter = _adapter(adapter_name)
     spec = PipelineSpec.model_validate(spec_payload)
