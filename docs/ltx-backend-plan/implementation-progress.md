@@ -7,7 +7,7 @@
 | 阶段 | 里程碑 | 状态 | 对应提交 |
 | --- | --- | --- | --- |
 | P0 | M1 资源可见 | 已完成 | `e5af69e` |
-| P1 | M2 Fast 生命周期 | 进行中（本地验收通过，待 H100） | M2 代码提交 |
+| P1 | M2 Fast 生命周期 | 已完成 | `b3956fd`、`4e5299f`、`201c1bc`、`e13bc0d` |
 | P2 | M3 动态调度 | 未开始 | — |
 | P3 | M4 HQ 能力 | 未开始 | — |
 | P4 | M5 真实任务 | 未开始 | — |
@@ -63,6 +63,16 @@ H100 只读 inventory（2026-07-31）：
 - `uv run pytest`：26 项通过；
 - `git diff --check`：通过。
 
-H100 验证：待 M2 代码推送并由目标主机 Git 同步后执行首次单卡真实热加载、3 次最小 Fast I2V 和进程级释放；在结果完成前本里程碑保持“进行中”。
+H100 真实验证（2026-07-31）：
+
+- 每次运行前重新读取 inventory，最终动态选择 physical index 1、UUID `GPU-5cae32f8…`；选卡前无 compute PID，NVML 基线 478 MiB；
+- Fast load + canonical warm-up：25.842 秒；ready 后稳定显存 56015 MiB；
+- ready worker PID `3706671`，adapter load count 为 1；
+- 同一 PID 连续执行 3 个 768×512、9 帧、24 FPS I2V，分别耗时 9.604、4.852、5.105 秒；峰值显存分别为 56335、56335、56334 MiB；
+- 3 个结果均为独立 H.264/AAC MP4，时长 0.375 秒，文件大小分别为 175649、170258、174138 字节；
+- 结果目录：`/data/oneiroi/ltx-2.3/outputs/oneiroi-worker-m2/m2-real-{1,2,3}/output/result.mp4`；
+- release 未触发 TERM/KILL；子进程退出、显存回到 478 MiB、无 Oneiroi orphan process、选中 GPU 前后均无外部 compute PID；
+- 首轮直接调用遗漏 `torch.inference_mode()` 曾触发 OOM；该缺陷由 `201c1bc` 修复，失败运行的 emergency release 和最终 NVML 检查均确认显存已回收；
+- `e13bc0d` 将核心 Fast transformer 跨任务常驻；ready 显存和后续任务耗时证实任务间未重新构造 transformer。
 
 未解决阻塞：无。
