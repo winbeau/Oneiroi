@@ -22,7 +22,6 @@ class Ltx23HqAdapter:
             raise ValueError("HQ PipelineSpec requires the distilled LoRA")
 
         from ltx_core.loader import LTXV_LORA_COMFY_RENAMING_MAP, LoraPathStrengthAndSDOps
-        from ltx_core.loader.registry import StateDictRegistry
         from ltx_pipelines.ti2vid_two_stages_hq import TI2VidTwoStagesHQPipeline
         from ltx_pipelines.utils.allocator_trim_strategy import AllocatorTrimStrategy
         from ltx_pipelines.utils.quantization_factory import QuantizationKind
@@ -41,7 +40,6 @@ class Ltx23HqAdapter:
                 sd_ops=LTXV_LORA_COMFY_RENAMING_MAP,
             )
         ]
-        self._registry = StateDictRegistry()
         self.pipeline = TI2VidTwoStagesHQPipeline(
             checkpoint_path=spec.checkpoint_path,
             distilled_lora=distilled_lora,
@@ -51,7 +49,7 @@ class Ltx23HqAdapter:
             gemma_root=spec.gemma_root,
             loras=(),
             quantization=quantization,
-            registry=self._registry,
+            registry=None,
             offload_mode=OffloadMode(spec.offload),
             alloc_trim_strategy=AllocatorTrimStrategy.TRIM,
         )
