@@ -1,9 +1,12 @@
 import {
+  Bot,
   Check,
   ChevronDown,
+  ImageIcon,
   ImagePlus,
   SlidersHorizontal,
   Sparkles,
+  Video,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -125,12 +128,19 @@ function SelectChip({
   );
 }
 
-export function Composer() {
+type ComposerProps = {
+  agentOpen?: boolean;
+  onAgentToggle?: () => void;
+};
+
+export function Composer({ agentOpen = false, onAgentToggle }: ComposerProps) {
   const draft = useStudioStore((state) => state.draft);
   const updateDraft = useStudioStore((state) => state.updateDraft);
   const submitDraft = useStudioStore((state) => state.submitDraft);
   const [submitted, setSubmitted] = useState(false);
   const [focused, setFocused] = useState(false);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const quickImageInputRef = useRef<HTMLInputElement>(null);
 
   const setQuality = (quality: GenerationDraft["quality"]) => {
     updateDraft(
@@ -149,7 +159,8 @@ export function Composer() {
   };
 
   return (
-    <motion.form
+    <div className="w-full">
+      <motion.form
       animate={{ y: focused ? -2 : 0 }}
       aria-label="视频生成创作器"
       className={cn(
@@ -184,6 +195,7 @@ export function Composer() {
         <label className="relative min-w-0 flex-1 rounded-lg bg-[var(--color-canvas)]/70 px-3 pb-6 pt-2 ring-1 ring-inset ring-[var(--color-border)] transition focus-within:bg-white focus-within:ring-[var(--color-accent)]/25">
           <span className="sr-only">生成提示词</span>
           <textarea
+            ref={promptRef}
             className="scrollbar-notion min-h-[68px] w-full resize-none bg-transparent text-sm leading-6 outline-none placeholder:text-[var(--color-text-faint)] md:min-h-[92px]"
             onChange={(event) => updateDraft({ prompt: event.target.value })}
             placeholder="描述主体动作、镜头变化、光线与声音……"
@@ -404,6 +416,72 @@ export function Composer() {
           </AnimatePresence>
         </Button>
       </div>
-    </motion.form>
+      </motion.form>
+
+      <div
+        aria-label="创作入口"
+        className="mt-4 flex items-center justify-center gap-2 sm:gap-2.5"
+        role="group"
+      >
+        <button
+          aria-label="图片"
+          className="group inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white/72 px-3.5 text-sm font-medium text-[var(--color-text-muted)] shadow-[var(--shadow-card)] backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[var(--color-border-strong)] hover:bg-white hover:text-[var(--color-text)] sm:px-4"
+          onClick={() => quickImageInputRef.current?.click()}
+          type="button"
+        >
+          <span className="grid size-6 place-items-center rounded-md bg-[rgb(214_154_87_/_10%)] text-[var(--color-warning)] transition group-hover:bg-[rgb(214_154_87_/_16%)]">
+            <ImageIcon aria-hidden="true" className="size-3.5" />
+          </span>
+          图片
+        </button>
+        <input
+          ref={quickImageInputRef}
+          accept="image/*"
+          className="sr-only"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            if (file) updateDraft({ firstFrame: await readImage(file) });
+            event.target.value = "";
+          }}
+          type="file"
+        />
+
+        <button
+          aria-label="视频"
+          aria-pressed="true"
+          className="group inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--color-accent)]/20 bg-[var(--color-accent-soft)] px-3.5 text-sm font-semibold text-[var(--color-accent)] shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:border-[var(--color-accent)]/30 hover:bg-[rgb(102_92_207_/_14%)] sm:px-4"
+          onClick={() => promptRef.current?.focus()}
+          type="button"
+        >
+          <span className="grid size-6 place-items-center rounded-md bg-white/80">
+            <Video aria-hidden="true" className="size-3.5" />
+          </span>
+          视频
+        </button>
+
+        <button
+          aria-label="Agent"
+          aria-pressed={agentOpen}
+          className={cn(
+            "group inline-flex h-10 items-center gap-2 rounded-xl border px-3.5 text-sm font-medium shadow-[var(--shadow-card)] backdrop-blur-sm transition hover:-translate-y-0.5 sm:px-4",
+            agentOpen
+              ? "border-[var(--color-text)] bg-[var(--color-text)] text-white"
+              : "border-[var(--color-border)] bg-white/72 text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] hover:bg-white hover:text-[var(--color-text)]",
+          )}
+          onClick={onAgentToggle}
+          type="button"
+        >
+          <span
+            className={cn(
+              "grid size-6 place-items-center rounded-md transition",
+              agentOpen ? "bg-white/12" : "bg-[var(--color-surface-muted)]",
+            )}
+          >
+            <Bot aria-hidden="true" className="size-3.5" />
+          </span>
+          Agent
+        </button>
+      </div>
+    </div>
   );
 }

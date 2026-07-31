@@ -10,10 +10,10 @@ const buildSuggestion = (idea: string) => {
   return `${subject}。固定广角机位，先明确主体动作，再保持人物身份、场景几何和光线一致。加入轻微、连续、可观察的手部和衣物运动，镜头运动克制，环境声音自然，不添加对白。`;
 };
 
-export function AgentPanel() {
+export function AgentPanel({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const draft = useStudioStore((state) => state.draft);
   const updateDraft = useStudioStore((state) => state.updateDraft);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [idea, setIdea] = useState("");
   const [suggestion, setSuggestion] = useState("");
 
