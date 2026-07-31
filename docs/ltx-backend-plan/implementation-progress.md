@@ -9,7 +9,7 @@
 | P0 | M1 资源可见 | 已完成 | `e5af69e` |
 | P1 | M2 Fast 生命周期 | 已完成 | `b3956fd`、`4e5299f`、`201c1bc`、`e13bc0d` |
 | P2 | M3 动态调度 | 已完成 | `3304dba` |
-| P3 | M4 HQ 能力 | 进行中（本地验收通过，待 H100） | M4 代码提交 |
+| P3 | M4 HQ 能力 | 已完成 | `00dacc9`、`375fc95`、`fcae104` |
 | P4 | M5 真实任务 | 未开始 | — |
 | P5 | M6 前端闭环 | 未开始 | — |
 | P6 | M7 生产加固 | 未开始 | — |
@@ -119,6 +119,14 @@ H100 只读复核：测试后再次读取实时 inventory；本阶段未加载�
 - `uv run pytest`：38 项通过、1 项 Redis 集成按环境开关跳过；
 - `git diff --check`：通过。
 
-H100 验证：待代码推送后重新读取 eligible inventory，并在不影响外部任务的单张已租约 HQ slot 上执行真实 Dev/HQ warm-up、最小 I2V、MP4 探测和进程级释放；在完成前本里程碑保持“进行中”。
+H100 真实验证（2026-07-31）：
+
+- 实时 inventory 有 4 张 eligible GPU，满足 HQ 至少 2 卡的 session 前置条件；最终动态选择 physical index 2、UUID `GPU-6ff18a65…` 作为 HQ slot，基线 478 MiB；
+- Dev/HQ PipelineSpec hash：`d0505a61391f7b9504a7cf277ab2489e812af75df51a5936f06e002cd0e88f51`；Dev checkpoint 和 Distilled LoRA SHA256 已在目标主机重新计算；
+- HQ load + 768×512 canonical warm-up：39.827 秒；ready 显存 1269 MiB；
+- 真实生产规格 I2V：1920×1088、121 帧、24 FPS、15 个 res2s step + 3 个 stage-2 step，耗时 165.607 秒，峰值 Torch 显存 27142 MiB；
+- 输出 `/data/oneiroi/ltx-2.3/outputs/oneiroi-worker-m4/m4-hq-production/output/result.mp4`，H.264/AAC，5.041667 秒，1929491 字节；结果与既有 176 秒 HQ CLI 冷路径基线处于同一量级；
+- HQ 使用 `AllocatorTrimStrategy.TRIM`，因为保留两个阶段的构建 state 会在 1080p stage-2 触发 OOM；该策略不降级 profile，仍使用 Dev checkpoint + HQ sampler，只在阶段间回收构建显存；
+- release 未触发 TERM/KILL，子进程退出、NVML 回到 478 MiB、无 orphan PID；两次 OOM 调整过程均执行 emergency release 并确认显存回收。
 
 未解决阻塞：无。
