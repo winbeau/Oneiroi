@@ -48,6 +48,7 @@ class Ltx23FastAdapter:
             raise RuntimeError("pipeline is not loaded")
         import torch
 
+        torch.cuda.empty_cache()
         torch.cuda.synchronize()
 
     def generate(
@@ -86,6 +87,10 @@ class Ltx23FastAdapter:
                 )
             )
 
+        import torch
+
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
         progress("preparing", 20, {})
         tiling_config = TilingConfig.default()
         video_chunks = get_video_chunks_number(request.num_frames, tiling_config)
