@@ -42,6 +42,8 @@ OUTPUT_PATH="${ONEIROI_LTX_OUTPUT_PATH:-}"
 LOG_PATH="${ONEIROI_LTX_LOG_PATH:-}"
 MANIFEST_PATH="${ONEIROI_LTX_MANIFEST_PATH:-}"
 OVERWRITE="${ONEIROI_LTX_OVERWRITE:-0}"
+CUDA_LINK_DIR="${ONEIROI_LTX_CUDA_LINK_DIR:-}"
+CUDA_RUNTIME_DIR="${ONEIROI_LTX_CUDA_RUNTIME_DIR:-}"
 DRY_RUN=0
 
 LTX_ROOT_OVERRIDE=""
@@ -171,6 +173,33 @@ make_absolute_path() {
             printf '%s/%s\n' "$INVOCATION_DIR" "$path"
             ;;
     esac
+}
+
+detect_cuda_library_dirs() {
+    local candidate
+
+    if [[ -z "$CUDA_LINK_DIR" ]]; then
+        for candidate in /usr/local/cuda/compat /usr/local/cuda-*/compat /usr/local/cuda-*/targets/x86_64-linux/lib/stubs; do
+            if [[ -f "$candidate/libcuda.so" ]]; then
+                CUDA_LINK_DIR="$candidate"
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$CUDA_RUNTIME_DIR" ]]; then
+        for candidate in /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib/wsl/lib; do
+            if [[ -f "$candidate/libcuda.so.1" ]]; then
+                CUDA_RUNTIME_DIR="$candidate"
+                break
+            fi
+        done
+    fi
+
+    [[ -z "$CUDA_LINK_DIR" || -f "$CUDA_LINK_DIR/libcuda.so" ]] \
+        || fail "CUDA link directory does not contain libcuda.so: $CUDA_LINK_DIR"
+    [[ -z "$CUDA_RUNTIME_DIR" || -f "$CUDA_RUNTIME_DIR/libcuda.so.1" ]] \
+        || fail "CUDA runtime directory does not contain libcuda.so.1: $CUDA_RUNTIME_DIR"
 }
 
 while (($#)); do
@@ -499,6 +528,15 @@ for command_name in awk date mkdir tee uv; do
     command -v "$command_name" >/dev/null 2>&1 || fail "required command is missing: $command_name"
 done
 
+detect_cuda_library_dirs
+CUDA_ENV=(CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES="$GPU")
+if [[ -n "$CUDA_LINK_DIR" ]]; then
+    CUDA_ENV+=(LIBRARY_PATH="$CUDA_LINK_DIR${LIBRARY_PATH:+:$LIBRARY_PATH}")
+fi
+if [[ -n "$CUDA_RUNTIME_DIR" ]]; then
+    CUDA_ENV+=(LD_LIBRARY_PATH="$CUDA_RUNTIME_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
+fi
+
 if [[ "$SYNC_MODE" == "always" || ("$SYNC_MODE" == "auto" && ! -x "$LTX_REPO_DIR/.venv/bin/python") ]]; then
     if ((DRY_RUN == 1)); then
         printf 'Would run: (cd %q && uv sync --frozen)\n' "$LTX_REPO_DIR"
@@ -552,12 +590,13 @@ printf '%s\n' \
     "Last frame:   ${LAST_FRAME:-disabled}" \
     "Quantization: $QUANTIZATION" \
     "Offload:      $OFFLOAD" \
+    "CUDA link:    ${CUDA_LINK_DIR:-not detected}" \
     "Output:       $OUTPUT_PATH" \
     "Log:          $LOG_PATH" \
     "Manifest:     $MANIFEST_PATH"
 
 printf 'Command: '
-printf '%q ' env CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES="$GPU" "${UV_COMMAND[@]}"
+printf '%q ' env "${CUDA_ENV[@]}" "${UV_COMMAND[@]}"
 printf '\n'
 
 if ((DRY_RUN == 1)); then
@@ -587,15 +626,16 @@ mkdir -p "$(dirname -- "$OUTPUT_PATH")" "$(dirname -- "$LOG_PATH")" "$(dirname -
         "$CHECKPOINT_PATH" "$SPATIAL_UPSAMPLER_PATH" "$GEMMA_ROOT"
     printf 'output_path=%q\nlog_path=%q\n' "$OUTPUT_PATH" "$LOG_PATH"
     printf 'command='
-    printf '%q ' env CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES="$GPU" "${UV_COMMAND[@]}"
+    printf '%q ' env "${CUDA_ENV[@]}" "${UV_COMMAND[@]}"
     printf '\n'
 } >"$MANIFEST_PATH"
 
 set +e
 (
     cd "$LTX_REPO_DIR"
-    export CUDA_DEVICE_ORDER=PCI_BUS_ID
-    export CUDA_VISIBLE_DEVICES="$GPU"
+    for env_assignment in "${CUDA_ENV[@]}"; do
+        export "$env_assignment"
+    done
     if [[ -x /usr/bin/time ]]; then
         /usr/bin/time -v "${UV_COMMAND[@]}"
     else

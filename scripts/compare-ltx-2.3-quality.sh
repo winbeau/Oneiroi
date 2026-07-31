@@ -27,6 +27,8 @@ OFFLOAD="${ONEIROI_LTX_COMPARE_OFFLOAD:-none}"
 SYNC_MODE="${ONEIROI_LTX_COMPARE_SYNC_MODE:-auto}"
 ENHANCE_PROMPT="${ONEIROI_LTX_COMPARE_ENHANCE_PROMPT:-0}"
 OVERWRITE="${ONEIROI_LTX_COMPARE_OVERWRITE:-0}"
+CUDA_LINK_DIR="${ONEIROI_LTX_CUDA_LINK_DIR:-}"
+CUDA_RUNTIME_DIR="${ONEIROI_LTX_CUDA_RUNTIME_DIR:-}"
 DRY_RUN=0
 
 LTX_ROOT="${ONEIROI_LTX_ROOT:-/data/oneiroi/ltx-2.3}"
@@ -117,6 +119,10 @@ Examples:
 
   # Print commands without generating
   scripts/compare-ltx-2.3-quality.sh --dry-run
+
+The script auto-detects a CUDA linker directory containing libcuda.so and the
+runtime directory containing libcuda.so.1. Override them when needed with
+ONEIROI_LTX_CUDA_LINK_DIR and ONEIROI_LTX_CUDA_RUNTIME_DIR.
 EOF
 }
 
@@ -151,6 +157,33 @@ make_absolute_path() {
         /*) printf '%s\n' "$path" ;;
         *) printf '%s/%s\n' "$INVOCATION_DIR" "$path" ;;
     esac
+}
+
+detect_cuda_library_dirs() {
+    local candidate
+
+    if [[ -z "$CUDA_LINK_DIR" ]]; then
+        for candidate in /usr/local/cuda/compat /usr/local/cuda-*/compat /usr/local/cuda-*/targets/x86_64-linux/lib/stubs; do
+            if [[ -f "$candidate/libcuda.so" ]]; then
+                CUDA_LINK_DIR="$candidate"
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$CUDA_RUNTIME_DIR" ]]; then
+        for candidate in /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib/wsl/lib; do
+            if [[ -f "$candidate/libcuda.so.1" ]]; then
+                CUDA_RUNTIME_DIR="$candidate"
+                break
+            fi
+        done
+    fi
+
+    [[ -z "$CUDA_LINK_DIR" || -f "$CUDA_LINK_DIR/libcuda.so" ]] \
+        || fail "CUDA link directory does not contain libcuda.so: $CUDA_LINK_DIR"
+    [[ -z "$CUDA_RUNTIME_DIR" || -f "$CUDA_RUNTIME_DIR/libcuda.so.1" ]] \
+        || fail "CUDA runtime directory does not contain libcuda.so.1: $CUDA_RUNTIME_DIR"
 }
 
 mode_is_valid() {
@@ -472,6 +505,15 @@ for command_name in awk date mkdir tee uv; do
     command -v "$command_name" >/dev/null 2>&1 || fail "required command is missing: $command_name"
 done
 
+detect_cuda_library_dirs
+CUDA_ENV=(CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES="$GPU")
+if [[ -n "$CUDA_LINK_DIR" ]]; then
+    CUDA_ENV+=(LIBRARY_PATH="$CUDA_LINK_DIR${LIBRARY_PATH:+:$LIBRARY_PATH}")
+fi
+if [[ -n "$CUDA_RUNTIME_DIR" ]]; then
+    CUDA_ENV+=(LD_LIBRARY_PATH="$CUDA_RUNTIME_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}")
+fi
+
 if [[ "$SYNC_MODE" == "always" || ("$SYNC_MODE" == "auto" && ! -x "$LTX_REPO_DIR/.venv/bin/python") ]]; then
     if ((DRY_RUN == 1)); then
         printf 'Would run: (cd %q && uv sync --frozen)\n' "$LTX_REPO_DIR"
@@ -489,7 +531,7 @@ build_command() {
 
     configure_mode "$mode"
     COMMAND=(
-        env CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES="$GPU"
+        env "${CUDA_ENV[@]}"
         uv run --no-sync python -m "$MODE_MODULE"
     )
 
@@ -562,6 +604,7 @@ printf '%s\n' \
     "Last frame:   ${LAST_FRAME:-disabled}" \
     "Quantization: $QUANTIZATION" \
     "Offload:      $OFFLOAD" \
+    "CUDA link:    ${CUDA_LINK_DIR:-not detected}" \
     "Output dir:   $OUTPUT_DIR"
 
 echo "Prompt: $PROMPT"
