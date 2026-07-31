@@ -50,6 +50,13 @@ pnpm dev:host
 scripts/deploy-web-pi.sh --mode preview --host 0.0.0.0 --port 4173
 ```
 
+当前 `pi5` 部署使用用户级 `oneiroi-studio.service`，可通过以下命令检查：
+
+```bash
+systemctl --user status oneiroi-studio.service
+journalctl --user -u oneiroi-studio.service -f
+```
+
 Runner 骨架可用以下方式启动；它当前只维护进程生命周期，尚未连接真实 LTX 管线：
 
 ```bash
