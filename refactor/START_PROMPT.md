@@ -23,7 +23,7 @@
 - 当前 proxy 固定注入 `oneiroi_user=lan-preview`，这是 P0 安全问题。
 - Pi 可访问 H100 `10.30.176.95:18000`；health、conversation、8 卡 inventory 已通过。
 - H100 Gateway `127.0.0.1:18010`，BFF `10.30.176.95:18000`；当前无 Runner 进程。
-- H100 8×H100，当前 4 卡 eligible；文件系统只剩约 9.5 GiB，禁止启动真实产物任务或自动清理。
+- H100 8×H100，当前 4 卡 eligible；探查时只剩约 9.5 GiB，实验同学已安排释放约 300 GiB。不要自动清理，完成后重新验证。
 - 本仓库保留 React/BFF/conversation/assets/product history；GPU lease/Runner/LTX 最终由 gpu-server 拥有。
 
 ## 你的执行顺序
@@ -43,7 +43,7 @@
 - 不泄露或提交 Cloudflare、Authentik、SMTP、数据库、Hugging Face、Tunnel 或 service token。
 - 不把 server-local paths 放入跨服务 DTO。
 - 不把 `cancel_requested` 当 `cancelled`。
-- 不在 H100 磁盘满时启动真实视频任务。
+- 实验同学清理约 300 GiB 前不启动真实视频任务；清理后必须重查空间和 artifact admission。
 - 不用 Docker 新建 Oneiroi/gpu-server 部署。
 - 不自动删除远端文件。
 - 不自行执行 sudo。若缺 Caddy/系统依赖，停止并给出一条完整 sudo 安装命令。

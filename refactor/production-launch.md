@@ -64,9 +64,9 @@
 
 `video.icthub.top/*` 必须与 `comfy.icthub.top/*` 同级使用 Cloudflare Access + Authentik OIDC。仅页面可访问不算完成；必须验证未登录 challenge、group 拒绝和深链接回跳。
 
-### P0：H100 磁盘满
+### P0：等待已安排的 H100 空间释放
 
-在至少释放约 200 GiB 或指定新的 artifact/model/cache 挂载前，不启动真实生成任务，不删除任何未知文件，不自动清理他人数据。
+探查时仅剩约 9.5 GiB；实验同学已安排释放约 300 GiB。本任务不删除任何文件。收到清理完成消息后重新验证 `/data`、artifact admission 和 quota/retention，再启动真实生成。
 
 ### P1：Vite preview 双实例
 
@@ -181,7 +181,7 @@ Oneiroi 已接近 `xju-feiyue` 的 warm-neutral 风格，但上线前统一以�
 
 - 登录安全 beta：约 2–3 天。
 - React 产品上线收口：约 1–2 天。
-- gpu-server Fast 真机 E2E：约 3–7 天，强依赖 H100 空间和 Runner。
+- gpu-server Fast 真机 E2E：约 3–7 天；实验同学释放约 300 GiB 后，主要依赖转为 Runner/artifact 实现。
 - 三仓邀请用户联调：约 1–2 天。
 
 总计约 1–2 周，H100 存储处理、Cloudflare Access 手工配置和 LTX 运行稳定性带来约 ±40% 不确定性。
