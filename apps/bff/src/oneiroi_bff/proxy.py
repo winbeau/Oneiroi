@@ -54,11 +54,13 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
         issuer=settings.service_assertion_issuer,
         audience=settings.service_assertion_audience,
         key_id=settings.service_assertion_key_id,
+        lifetime_seconds=settings.service_assertion_lifetime_seconds,
     )
     service_validator = ServiceAssertionValidator(
         settings.service_public_key_file,
         issuer=settings.service_assertion_issuer,
         audience=settings.service_assertion_audience,
+        clock_skew_seconds=settings.service_assertion_clock_skew_seconds,
     )
 
     async def identity(request: Request, header_user: str | None) -> ResolvedIdentity:

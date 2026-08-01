@@ -28,6 +28,8 @@ class BffSettings(BaseSettings):
     service_assertion_issuer: str = "oneiroi-pi-bff"
     service_assertion_audience: str = "oneiroi-h100-gateway"
     service_assertion_key_id: str = "oneiroi-pi-1"
+    service_assertion_lifetime_seconds: int = Field(default=300, ge=30, le=600)
+    service_assertion_clock_skew_seconds: float = Field(default=120, ge=0, le=300)
 
     @property
     def trusted_origins(self) -> frozenset[str]:
