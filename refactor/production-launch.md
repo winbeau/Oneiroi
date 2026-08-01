@@ -48,7 +48,7 @@
 - H100 checkout：`/root/wenbiao_zhao/Oneiroi`，运行 commit `69a5384`，落后 Pi runtime 修复 commit。
 - Redis `127.0.0.1:6379`、PostgreSQL `127.0.0.1:5432` 正常运行。
 - 当前未发现 Oneiroi Runner/worker_process/LTX inference 进程。
-- 文件系统 28T 已 100%，仅约 9.5 GiB 可用：真实视频生成和 artifact 写入的硬阻塞。
+- 文件系统显示 100%，但仍约 9.5 GiB 可用；权重已齐、单视频几 MiB，足够受控 Fast MVP，需严格 temp cleanup/admission。
 - `/data/oneiroi` 约 128 GiB，LTX Fast/HQ/Gemma 模型已存在。
 - LTX code commit：`9377758131b1ffde4b7f766804590a6617bf2ab9`。
 - LTX model revision：`4229404625088d21c4f112eb640fb04a0900ee25`。
@@ -64,9 +64,9 @@
 
 `video.icthub.top/*` 必须与 `comfy.icthub.top/*` 同级使用 Cloudflare Access + Authentik OIDC。仅页面可访问不算完成；必须验证未登录 challenge、group 拒绝和深链接回跳。
 
-### P0：等待已安排的 H100 空间释放
+### 存储运行约束（不阻塞 Fast MVP）
 
-探查时仅剩约 9.5 GiB；实验同学已安排释放约 300 GiB。本任务不删除任何文件。收到清理完成消息后重新验证 `/data`、artifact admission 和 quota/retention，再启动真实生成。
+H100 当前约 9.5 GiB 可用，但权重、Gemma、upscaler 已全部下载，单个 MP4 只有几 MiB，足够先跑 Fast E2E。禁止重新下载/复制权重；attempt temp 在 artifact 上传后立即清理，并设置低水位 admission。同学后续释放 300 GiB 只增加长期余量。
 
 ### P1：Vite preview 双实例
 
@@ -181,7 +181,7 @@ Oneiroi 已接近 `xju-feiyue` 的 warm-neutral 风格，但上线前统一以�
 
 - 登录安全 beta：约 2–3 天。
 - React 产品上线收口：约 1–2 天。
-- gpu-server Fast 真机 E2E：约 3–7 天；实验同学释放约 300 GiB 后，主要依赖转为 Runner/artifact 实现。
+- gpu-server Fast 真机 E2E：约 3–7 天；当前空间即可开始，主要依赖 Runner/artifact 实现。
 - 三仓邀请用户联调：约 1–2 天。
 
 总计约 1–2 周，H100 存储处理、Cloudflare Access 手工配置和 LTX 运行稳定性带来约 ±40% 不确定性。

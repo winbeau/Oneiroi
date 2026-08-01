@@ -23,7 +23,7 @@
 - 当前有两个 Vite preview 实例，尚非 immutable static production deployment。
 - H100 BFF/Gateway、Redis/PostgreSQL 正常；没有 Runner 进程。
 - H100 8 张 H100 中当前 4 张 eligible，Fast/HQ capability 声明可用。
-- 探查时 H100 只剩约 9.5 GiB；实验同学已安排释放约 300 GiB，完成后需重验 artifact admission。
+- H100 当前约 9.5 GiB；权重已齐且单视频几 MiB，足够 Fast MVP，但必须禁止重复下载并及时清理 temp。
 - Pi/H100 runtime commit 不一致，需要固定同一 release。
 
 ## 当前 P0
@@ -31,6 +31,6 @@
 1. `video.icthub.top/*` 加入与 ComfyUI 同级的 Cloudflare Access + Authentik OIDC。
 2. BFF 验证 Access JWT，删除固定用户 cookie。
 3. 把 React 从“页面可打开”推进到可回滚、可重启、可区分用户的安全 beta。
-4. 等待约 300 GiB 清理完成并重验空间，然后启动 gpu-server Runner/LTX 真机生成。
+4. 直接完成现有模型 preflight、temp cleanup/admission，然后启动 gpu-server Runner/LTX Fast 真机生成。
 
 完整计划见 [`production-launch.md`](./production-launch.md)，执行 Agent 从 [`START_PROMPT.md`](./START_PROMPT.md) 启动。
