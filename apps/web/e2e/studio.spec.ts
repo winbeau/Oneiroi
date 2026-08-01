@@ -201,6 +201,21 @@ test("compute load gates HQ and completes a real API-driven timeline", async ({ 
   await expect(page.getByText("GPU 0").last()).toBeVisible();
 });
 
+test("compute load works when crypto.randomUUID is unavailable", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(globalThis.crypto, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await mockBackend(page, { gpuCount: 1 });
+  await page.goto("/create");
+  await page.getByRole("button", { name: "热加载" }).click();
+  await page.getByRole("button", { name: "开始热加载" }).click();
+
+  await expect(page.getByText(/1 张 H100/)).toBeVisible();
+});
+
 test("release returns compute control to the empty state", async ({ page }) => {
   await mockBackend(page, { gpuCount: 2 });
   await page.goto("/create");

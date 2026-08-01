@@ -7,6 +7,7 @@ import type {
   GpuInventory,
 } from "@/features/studio/types";
 import { apiRequest, apiUrl, demoMode } from "@/lib/api-client";
+import { createUuid } from "@/lib/uuid";
 import { useComputeUiStore } from "@/store/compute-ui-store";
 
 const computeKeys = {
@@ -98,7 +99,7 @@ export function useCreateComputeSession() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
+          "Idempotency-Key": createUuid(),
         },
         body: JSON.stringify({ ...payload, profilePolicy: "balanced" }),
       }),
