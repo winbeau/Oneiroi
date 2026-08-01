@@ -224,10 +224,19 @@ request "$BASE_URL/v1/jobs/$JOB_ID/manifest" >"$TMP_DIR/manifest.json"
 value=json.load(open(sys.argv[1], encoding="utf-8"))
 assert value["jobId"] == sys.argv[2]
 assert "path" not in json.dumps(value).lower()' "$TMP_DIR/manifest.json" "$JOB_ID"
-ffprobe -v error -show_entries format=format_name,duration,size \
-    -of default=noprint_wrappers=1 "$TMP_DIR/result.mp4" \
-    >"$TMP_DIR/ffprobe.txt"
-grep -q 'format_name=.*mp4' "$TMP_DIR/ffprobe.txt"
+if command -v ffprobe >/dev/null 2>&1; then
+    ffprobe -v error -show_entries format=format_name,duration,size \
+        -of default=noprint_wrappers=1 "$TMP_DIR/result.mp4" \
+        >"$TMP_DIR/ffprobe.txt"
+    grep -q 'format_name=.*mp4' "$TMP_DIR/ffprobe.txt"
+else
+    "$PYTHON_BIN" -c 'from pathlib import Path
+path=Path(__import__("sys").argv[1])
+data=path.read_bytes()
+assert b"ftyp" in data[:64], "download is not an MP4 container"
+print("format_name=mp4")
+print(f"size={len(data)}")' "$TMP_DIR/result.mp4" >"$TMP_DIR/ffprobe.txt"
+fi
 
 printf 'POST release and verify terminal snapshot\n'
 RELEASE_RESPONSE="$(request \
