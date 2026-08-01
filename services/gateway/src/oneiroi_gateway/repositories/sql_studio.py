@@ -3,6 +3,7 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from oneiroi_common.jobs import JobStatus
 from oneiroi_common.studio import AssetResponse, ConversationResponse, JobEventResponse, JobResponse
 from oneiroi_gateway.db.models.studio import (
     AssetModel,
@@ -166,6 +167,18 @@ class SqlStudioRepository:
             ).all()
         return [JobResponse.model_validate(row.response_json) for row in rows]
 
+    async def list_incomplete_jobs(self) -> list[StoredJob]:
+        terminal = [
+            JobStatus.SUCCEEDED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+        ]
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(select(JobModel).where(JobModel.state.not_in(terminal)))
+            ).all()
+        return [self._stored_job(row) for row in rows]
+
     async def get_job(self, owner_id: str, job_id: str) -> StoredJob:
         async with self.sessions() as session:
             row = await session.scalar(
@@ -208,10 +221,31 @@ class SqlStudioRepository:
                     warm_start=attempt.warm_start,
                     status=attempt.status,
                     error_code=attempt.error_code,
+                    peak_vram_mib=attempt.peak_vram_mib,
+                    load_seconds=attempt.load_seconds,
+                    generation_seconds=attempt.generation_seconds,
+                    encoding_seconds=attempt.encoding_seconds,
                     created_at=attempt.created_at,
                     finished_at=attempt.finished_at,
                 )
             )
+            await session.commit()
+
+    async def update_attempt(self, attempt: JobAttemptRecord) -> None:
+        async with self.sessions() as session:
+            row = await session.get(JobAttemptModel, attempt.id)
+            if row is None:
+                raise KeyError(attempt.id)
+            row.runner_id = attempt.runner_id
+            row.worker_pid = attempt.worker_pid
+            row.warm_start = attempt.warm_start
+            row.status = attempt.status
+            row.error_code = attempt.error_code
+            row.peak_vram_mib = attempt.peak_vram_mib
+            row.load_seconds = attempt.load_seconds
+            row.generation_seconds = attempt.generation_seconds
+            row.encoding_seconds = attempt.encoding_seconds
+            row.finished_at = attempt.finished_at
             await session.commit()
 
     async def list_attempts(self, job_id: str) -> list[JobAttemptRecord]:
@@ -237,6 +271,10 @@ class SqlStudioRepository:
                 error_code=row.error_code,
                 created_at=row.created_at,
                 finished_at=row.finished_at,
+                peak_vram_mib=row.peak_vram_mib,
+                load_seconds=row.load_seconds,
+                generation_seconds=row.generation_seconds,
+                encoding_seconds=row.encoding_seconds,
             )
             for row in rows
         ]

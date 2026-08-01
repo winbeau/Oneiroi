@@ -1,7 +1,7 @@
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Header, Request, Response, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 
 from oneiroi_bff.gateway_client import GatewayClient
@@ -17,7 +17,13 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
         cookie_user = request.cookies.get("oneiroi_user")
         if settings.environment == "development":
             return (header_user or cookie_user or "demo-user").strip() or "demo-user"
-        return (cookie_user or "").strip()
+        user = (cookie_user or "").strip()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="AUTHENTICATION_REQUIRED",
+            )
+        return user
 
     async def forward(
         request: Request,

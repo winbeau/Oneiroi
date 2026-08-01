@@ -12,6 +12,7 @@ from oneiroi_common.compute import (
     ComputeSessionSnapshot,
     GpuInventoryResponse,
 )
+from oneiroi_gateway.audit import audit_event
 from oneiroi_gateway.services.capabilities import CapabilityService
 from oneiroi_gateway.services.compute_sessions import ComputeSessionService
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService
@@ -57,11 +58,17 @@ def create_compute_router(
         idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     ) -> ComputeSessionSnapshot:
         try:
-            return await sessions.create(user, payload, idempotency_key)
-        except ValueError as exc:
+            session = await sessions.create(user, payload, idempotency_key)
+        except (ValueError, RuntimeError) as exc:
+            audit_event(
+                "compute.create",
+                user,
+                outcome="failed",
+                reason=type(exc).__name__,
+            )
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-        except RuntimeError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        audit_event("compute.create", user, resource_id=session.id, outcome="succeeded")
+        return session
 
     @router.get(
         "/sessions/{session_id}",
@@ -114,10 +121,32 @@ def create_compute_router(
         user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
     ) -> ComputeSessionSnapshot:
         try:
-            return await sessions.release(user, session_id, payload)
+            session = await sessions.release(user, session_id, payload)
         except KeyError as exc:
+            audit_event(
+                "compute.release",
+                user,
+                resource_id=session_id,
+                outcome="failed",
+                reason="NOT_FOUND",
+            )
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
         except ValueError as exc:
+            audit_event(
+                "compute.release",
+                user,
+                resource_id=session_id,
+                outcome="failed",
+                reason=type(exc).__name__,
+            )
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        audit_event(
+            "compute.release",
+            user,
+            resource_id=session_id,
+            outcome="succeeded" if session.state.value == "released" else "failed",
+            reason=session.error_code,
+        )
+        return session
 
     return router

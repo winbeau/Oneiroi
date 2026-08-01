@@ -1,5 +1,8 @@
+import asyncio
 import hashlib
 import json
+import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
@@ -19,6 +22,7 @@ from oneiroi_common.compute import (
     profile_plan_for_count,
 )
 from oneiroi_gateway.redis.leases import InMemoryLeaseStore, LeaseStore
+from oneiroi_gateway.repositories.compute import ComputeStateRepository
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService
 from oneiroi_gateway.services.session_events import SessionEventService
 
@@ -34,9 +38,15 @@ class ComputeBackend(Protocol):
         slot_id: str,
         gpu: GpuInfo,
         profile: ProfileTier,
+        fencing_token: str,
     ) -> dict[str, object]: ...
 
-    async def release_slot(self, session_id: str, slot: ComputeSlot) -> bool: ...
+    async def release_slot(
+        self,
+        session_id: str,
+        slot: ComputeSlot,
+        fencing_token: str,
+    ) -> bool: ...
 
 
 class UnavailableComputeBackend:
@@ -46,10 +56,16 @@ class UnavailableComputeBackend:
         slot_id: str,
         gpu: GpuInfo,
         profile: ProfileTier,
+        fencing_token: str,
     ) -> dict[str, object]:
         raise RuntimeError("no Runner control backend is configured")
 
-    async def release_slot(self, session_id: str, slot: ComputeSlot) -> bool:
+    async def release_slot(
+        self,
+        session_id: str,
+        slot: ComputeSlot,
+        fencing_token: str,
+    ) -> bool:
         return False
 
 
@@ -64,11 +80,17 @@ class RecordingComputeBackend:
         slot_id: str,
         gpu: GpuInfo,
         profile: ProfileTier,
+        fencing_token: str,
     ) -> dict[str, object]:
         self.loaded.append((session_id, slot_id, gpu.id, profile))
         return {"workerPid": 12345, "loadSeconds": 0.01}
 
-    async def release_slot(self, session_id: str, slot: ComputeSlot) -> bool:
+    async def release_slot(
+        self,
+        session_id: str,
+        slot: ComputeSlot,
+        fencing_token: str,
+    ) -> bool:
         self.released.append((session_id, slot.id))
         return True
 
@@ -81,15 +103,22 @@ class ComputeSessionService:
         *,
         leases: LeaseStore | None = None,
         events: SessionEventService | None = None,
+        state_repository: ComputeStateRepository | None = None,
         lease_ttl_seconds: float = 60,
+        idle_ttl_seconds: float = 86_400,
     ) -> None:
         self.inventory = inventory
         self.backend = backend
         self.leases = leases or InMemoryLeaseStore()
         self.events = events or SessionEventService()
+        self.state_repository = state_repository
         self.lease_ttl_seconds = lease_ttl_seconds
+        self.idle_ttl_seconds = idle_ttl_seconds
         self.sessions: dict[str, ComputeSessionSnapshot] = {}
         self.idempotency: dict[tuple[str, str], tuple[str, str]] = {}
+        self._lease_tasks: dict[str, asyncio.Task[None]] = {}
+        self._fencing_tokens: dict[str, str] = {}
+        self._last_activity: dict[str, float] = {}
 
     async def create(
         self,
@@ -145,6 +174,7 @@ class ComputeSessionService:
         if not acquired:
             raise RuntimeError("NO_ELIGIBLE_GPU")
         acquired_ids = {lease.gpu_id for lease in acquired}
+        fencing_by_gpu = {lease.gpu_id: lease.fencing_token for lease in acquired}
         selected = [gpu for gpu in eligible if gpu.id in acquired_ids]
         if not payload.allow_partial and len(selected) < requested:
             await self.leases.release_session(session_id)
@@ -178,9 +208,14 @@ class ComputeSessionService:
             createdAt=utc_now(),
         )
         self.sessions[session_id] = session
+        self._last_activity[session_id] = time.monotonic()
+        self._fencing_tokens.update(
+            {slot.id: fencing_by_gpu[slot.gpu_id] for slot in session.slots}
+        )
         if idempotency_key:
             self.idempotency[(owner_id, idempotency_key)] = (fingerprint, session_id)
         await self._emit_snapshot(session, "compute.session.updated")
+        self._start_lease_renewal(session)
 
         failures = 0
         session.state = ComputeSessionState.LOADING
@@ -190,19 +225,24 @@ class ComputeSessionService:
             slot.load_progress = 5
             await self._emit_slot(session, slot)
             try:
-                await self.backend.load_slot(
+                result = await self.backend.load_slot(
                     session.id,
                     slot.id,
                     gpu,
                     slot.profile or ProfileTier.FAST,
+                    self._fencing_tokens[slot.id],
                 )
                 slot.state = GpuState.READY
                 slot.load_stage = "ready"
                 slot.load_progress = 100
+                if pipeline_hash := result.get("pipelineSpecHash"):
+                    slot.pipeline_spec_hash = str(pipeline_hash)
             except Exception as exc:
                 failures += 1
                 slot.state = GpuState.ERROR
                 slot.last_error = str(exc)
+                await self.leases.release_gpu(slot.gpu_id, session.id)
+                self._fencing_tokens.pop(slot.id, None)
             await self._emit_slot(session, slot)
 
         ready_count = sum(slot.state is GpuState.READY for slot in session.slots)
@@ -219,8 +259,33 @@ class ComputeSessionService:
             session.state = ComputeSessionState.FAILED
             session.error_code = "MODEL_LOAD_FAILED"
             session.error_message = "no allocated slot became ready"
+            await self.leases.release_session(session.id)
+            await self._stop_lease_renewal(session.id)
             await self._emit_snapshot(session, "compute.session.failed")
         return session
+
+    async def restore(self) -> list[str]:
+        if self.state_repository is None:
+            return []
+        active_leases = await self.leases.active()
+        restored: list[str] = []
+        for session in await self.state_repository.load_active():
+            self.sessions[session.id] = session
+            self._last_activity[session.id] = time.monotonic()
+            for slot in session.slots:
+                lease = active_leases.get(slot.gpu_id)
+                if lease is not None and lease.session_id == session.id:
+                    self._fencing_tokens[slot.id] = lease.fencing_token
+                elif slot.state not in {GpuState.EMPTY, GpuState.ERROR}:
+                    slot.state = GpuState.ERROR
+                    slot.last_error = "GPU_LEASE_LOST"
+                    session.state = ComputeSessionState.FAILED
+                    session.error_code = "GPU_LEASE_LOST"
+            if self._fencing_tokens_for_session(session):
+                self._start_lease_renewal(session)
+            await self.state_repository.save(session)
+            restored.append(session.id)
+        return restored
 
     def get(self, owner_id: str, session_id: str) -> ComputeSessionSnapshot:
         session = self.sessions.get(session_id)
@@ -247,7 +312,11 @@ class ComputeSessionService:
         for slot in session.slots:
             slot.state = GpuState.UNLOADING
             await self._emit_slot(session, slot)
-            released = await self.backend.release_slot(session.id, slot)
+            released = await self.backend.release_slot(
+                session.id,
+                slot,
+                self._fencing_tokens.get(slot.id, ""),
+            )
             all_released = all_released and released
             slot.state = GpuState.EMPTY if released else GpuState.ERROR
             if not released:
@@ -255,8 +324,12 @@ class ComputeSessionService:
             await self._emit_slot(session, slot)
         if all_released:
             await self.leases.release_session(session.id)
+            for slot in session.slots:
+                self._fencing_tokens.pop(slot.id, None)
+            await self._stop_lease_renewal(session.id)
             session.state = ComputeSessionState.RELEASED
             session.released_at = utc_now()
+            self._last_activity.pop(session.id, None)
             await self._emit_snapshot(session, "compute.session.released")
         else:
             session.state = ComputeSessionState.FAILED
@@ -277,6 +350,7 @@ class ComputeSessionService:
                 slot.state = GpuState.ERROR
                 slot.last_error = "RUNNER_HEARTBEAT_LOST"
                 await self.leases.release_gpu(slot.gpu_id, session.id)
+                self._fencing_tokens.pop(slot.id, None)
                 await self._emit_slot(session, slot)
                 changed = True
             if changed:
@@ -291,7 +365,110 @@ class ComputeSessionService:
                     await self._emit_snapshot(session, "compute.session.failed")
         return affected
 
+    def _fencing_tokens_for_session(self, session: ComputeSessionSnapshot) -> list[str]:
+        return [
+            self._fencing_tokens[slot.id]
+            for slot in session.slots
+            if slot.id in self._fencing_tokens
+        ]
+
+    async def persist(self, session_id: str) -> None:
+        if self.state_repository is not None and session_id in self.sessions:
+            await self.state_repository.save(self.sessions[session_id])
+
+    def touch(self, session_id: str) -> None:
+        if session_id in self.sessions:
+            self._last_activity[session_id] = time.monotonic()
+
+    def fencing_token(self, slot_id: str) -> str:
+        try:
+            return self._fencing_tokens[slot_id]
+        except KeyError as exc:
+            raise RuntimeError("GPU_LEASE_LOST") from exc
+
+    async def close(self) -> None:
+        for session_id in list(self._lease_tasks):
+            await self._stop_lease_renewal(session_id)
+        close = getattr(self.leases, "close", None)
+        if close is not None:
+            await close()
+
+    def _start_lease_renewal(self, session: ComputeSessionSnapshot) -> None:
+        task = asyncio.create_task(
+            self._renew_lease_loop(session),
+            name=f"lease-renewal-{session.id}",
+        )
+        self._lease_tasks[session.id] = task
+
+    async def _stop_lease_renewal(self, session_id: str) -> None:
+        task = self._lease_tasks.pop(session_id, None)
+        if task is None or task is asyncio.current_task():
+            return
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    async def _renew_lease_loop(self, session: ComputeSessionSnapshot) -> None:
+        interval = max(0.01, self.lease_ttl_seconds / 3)
+        try:
+            while session.state is not ComputeSessionState.RELEASED:
+                await asyncio.sleep(interval)
+                last_activity = self._last_activity.get(session.id, time.monotonic())
+                if (
+                    session.state in {ComputeSessionState.READY, ComputeSessionState.DEGRADED}
+                    and time.monotonic() - last_activity >= self.idle_ttl_seconds
+                ):
+                    await self.release(
+                        session.owner_id,
+                        session.id,
+                        ComputeSessionRelease(),
+                    )
+                    return
+                expected = {
+                    slot.gpu_id
+                    for slot in session.slots
+                    if slot.state is not GpuState.EMPTY
+                    and (
+                        slot.state is not GpuState.ERROR
+                        or slot.last_error == "GPU_MEMORY_NOT_RELEASED"
+                    )
+                }
+                if not expected:
+                    return
+                try:
+                    renewed = set(
+                        await self.leases.renew_session(
+                            session.id,
+                            ttl_seconds=self.lease_ttl_seconds,
+                        )
+                    )
+                except Exception:
+                    session.state = ComputeSessionState.FAILED
+                    session.error_code = "REDIS_LEASE_RENEWAL_FAILED"
+                    session.error_message = "GPU lease renewal backend is unavailable"
+                    await self._emit_snapshot(session, "compute.session.failed")
+                    return
+                missing = expected - renewed
+                if not missing:
+                    continue
+                for slot in session.slots:
+                    if slot.gpu_id in missing:
+                        slot.state = GpuState.ERROR
+                        slot.last_error = "GPU_LEASE_LOST"
+                        await self._emit_slot(session, slot)
+                session.state = ComputeSessionState.FAILED
+                session.error_code = "GPU_LEASE_LOST"
+                session.error_message = "one or more GPU leases could not be renewed"
+                await self._emit_snapshot(session, "compute.session.failed")
+                return
+        except asyncio.CancelledError:
+            raise
+        finally:
+            self._lease_tasks.pop(session.id, None)
+
     async def _emit_snapshot(self, session: ComputeSessionSnapshot, event_type: str) -> None:
+        if self.state_repository is not None:
+            await self.state_repository.save(session)
         await self.events.emit(
             session.id,
             event_type,
@@ -299,6 +476,8 @@ class ComputeSessionService:
         )
 
     async def _emit_slot(self, session: ComputeSessionSnapshot, slot: ComputeSlot) -> None:
+        if self.state_repository is not None:
+            await self.state_repository.save(session)
         await self.events.emit(
             session.id,
             "compute.slot.updated",

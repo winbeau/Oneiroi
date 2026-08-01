@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import time
@@ -27,6 +28,40 @@ def _adapter(adapter_name: str) -> Any:
     raise ValueError(f"unknown adapter: {adapter_name}")
 
 
+def _verify_file(path_value: str, expected_sha256: str) -> None:
+    path = Path(path_value)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    if digest.hexdigest() != expected_sha256:
+        raise RuntimeError(f"MODEL_HASH_MISMATCH: {path.name}")
+
+
+def _verify_pipeline_spec(spec: PipelineSpec) -> None:
+    _verify_file(spec.checkpoint_path, spec.checkpoint_sha256)
+    _verify_file(spec.upsampler_path, spec.upsampler_sha256)
+    if len(spec.lora_paths_and_scales) != len(spec.lora_sha256s):
+        raise RuntimeError("MODEL_HASH_MISMATCH: LoRA hash count")
+    for (path, _scale), expected_sha256 in zip(
+        spec.lora_paths_and_scales,
+        spec.lora_sha256s,
+        strict=True,
+    ):
+        _verify_file(path, expected_sha256)
+    if not Path(spec.gemma_root).is_dir():
+        raise FileNotFoundError(spec.gemma_root)
+
+
+def _error_code(exc: Exception) -> str:
+    message = str(exc).lower()
+    if "out of memory" in message or "cuda_out_of_memory" in message:
+        return "CUDA_OUT_OF_MEMORY"
+    return type(exc).__name__
+
+
 def _peak_vram_mib() -> int:
     try:
         import torch
@@ -53,6 +88,9 @@ def worker_process_main(
     started = time.perf_counter()
 
     try:
+        connection.send({"type": "loading", "stage": "verifying_model_assets", "progress": 10})
+        if adapter_name != "fake":
+            _verify_pipeline_spec(spec)
         connection.send({"type": "loading", "stage": "loading_checkpoint", "progress": 20})
         adapter.load(spec)
         connection.send({"type": "loading", "stage": "moving_weights_to_gpu", "progress": 75})
@@ -66,6 +104,7 @@ def worker_process_main(
             }
         )
 
+        jobs_completed = 0
         while True:
             message = connection.recv()
             message_type = message.get("type")
@@ -124,8 +163,9 @@ def worker_process_main(
                     elapsed_seconds=elapsed,
                     peak_vram_mib=_peak_vram_mib(),
                     worker_pid=os.getpid(),
-                    warm_start=adapter.load_count == 1,
+                    warm_start=jobs_completed > 0,
                 )
+                jobs_completed += 1
                 connection.send(
                     {
                         "type": "succeeded",
@@ -139,7 +179,7 @@ def worker_process_main(
                     {
                         "type": "failed",
                         "jobId": request.job_id,
-                        "error": type(exc).__name__,
+                        "error": _error_code(exc),
                         "message": str(exc),
                     }
                 )
@@ -147,7 +187,7 @@ def worker_process_main(
         connection.send(
             {
                 "type": "load_failed",
-                "error": type(exc).__name__,
+                "error": _error_code(exc),
                 "message": str(exc),
             }
         )

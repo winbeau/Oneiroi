@@ -37,6 +37,9 @@ async def test_redis_lease_acquisition_is_atomic() -> None:
         assert competing == []
         active = await store.active()
         assert all(active[gpu_id].session_id == session for gpu_id in gpus)
+        assert set(await store.renew_session(session, ttl_seconds=60)) == set(gpus)
+        assert not await store.release_gpu(gpus[0], f"competing-{suffix}")
+        assert (await store.active())[gpus[0]].session_id == session
         assert set(await store.release_session(session)) == set(gpus)
     finally:
         await store.release_session(session)

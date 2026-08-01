@@ -3,7 +3,13 @@ import asyncio
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from oneiroi_common.compute import ComputeSessionCreate, GpuInfo, GpuState, ProfileTier
+from oneiroi_common.compute import (
+    ComputeSessionCreate,
+    ComputeSessionRelease,
+    GpuInfo,
+    GpuState,
+    ProfileTier,
+)
 from oneiroi_gateway.main import create_app
 from oneiroi_gateway.redis.leases import InMemoryLeaseStore
 from oneiroi_gateway.services.compute_sessions import (
@@ -106,6 +112,116 @@ async def test_heartbeat_loss_marks_slot_and_clears_only_stale_lease() -> None:
     assert session.slots[0].last_error == "RUNNER_HEARTBEAT_LOST"
     assert stale_gpu not in await leases.active()
     assert len(await leases.active()) == 2
+
+
+@pytest.mark.asyncio
+async def test_session_renews_lease_during_slow_model_load() -> None:
+    class SlowBackend(RecordingComputeBackend):
+        async def load_slot(
+            self,
+            session_id,
+            slot_id,
+            selected_gpu,
+            profile,
+            fencing_token,
+        ):
+            await asyncio.sleep(0.08)
+            return await super().load_slot(
+                session_id,
+                slot_id,
+                selected_gpu,
+                profile,
+                fencing_token,
+            )
+
+    inventory = GpuInventoryService(InMemoryInventoryProvider([gpu(7)]))
+    leases = InMemoryLeaseStore()
+    service = ComputeSessionService(
+        inventory,
+        SlowBackend(),
+        leases=leases,
+        lease_ttl_seconds=0.03,
+    )
+
+    session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
+
+    assert (await leases.active())["GPU-0007"].session_id == session.id
+    await service.release("user-a", session.id, ComputeSessionRelease())
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_redis_renewal_failure_marks_session_failed() -> None:
+    class FailingRenewalStore(InMemoryLeaseStore):
+        async def renew_session(self, session_id: str, *, ttl_seconds: float):
+            del session_id, ttl_seconds
+            raise ConnectionError("redis unavailable")
+
+    inventory = GpuInventoryService(InMemoryInventoryProvider([gpu(7)]))
+    service = ComputeSessionService(
+        inventory,
+        RecordingComputeBackend(),
+        leases=FailingRenewalStore(),
+        lease_ttl_seconds=0.03,
+    )
+    session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
+
+    for _ in range(20):
+        if session.state.value == "failed":
+            break
+        await asyncio.sleep(0.01)
+
+    assert session.error_code == "REDIS_LEASE_RENEWAL_FAILED"
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_memory_release_keeps_lease_renewed() -> None:
+    class FailedReleaseBackend(RecordingComputeBackend):
+        async def release_slot(self, session_id, slot, fencing_token):
+            del session_id, slot, fencing_token
+            return False
+
+    inventory = GpuInventoryService(InMemoryInventoryProvider([gpu(7)]))
+    leases = InMemoryLeaseStore()
+    service = ComputeSessionService(
+        inventory,
+        FailedReleaseBackend(),
+        leases=leases,
+        lease_ttl_seconds=0.03,
+    )
+    session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
+    released = await service.release("user-a", session.id, ComputeSessionRelease())
+    await asyncio.sleep(0.05)
+
+    assert released.state.value == "failed"
+    assert (await leases.active())["GPU-0007"].session_id == session.id
+    await service.close()
+
+
+@pytest.mark.asyncio
+async def test_idle_ttl_releases_worker_and_gpu_lease() -> None:
+    inventory = GpuInventoryService(InMemoryInventoryProvider([gpu(7)]))
+    leases = InMemoryLeaseStore()
+    backend = RecordingComputeBackend()
+    service = ComputeSessionService(
+        inventory,
+        backend,
+        leases=leases,
+        lease_ttl_seconds=0.03,
+        idle_ttl_seconds=0.05,
+    )
+    session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
+
+    for _ in range(50):
+        if session.state.value == "released":
+            break
+        await asyncio.sleep(0.01)
+
+    assert session.state.value == "released"
+    assert backend.released == [(session.id, session.slots[0].id)]
+    assert await leases.active() == {}
+    await service.close()
 
 
 @pytest.mark.asyncio

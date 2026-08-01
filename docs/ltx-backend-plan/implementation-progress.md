@@ -11,8 +11,8 @@
 | P2 | M3 动态调度 | 已完成 | `3304dba` |
 | P3 | M4 HQ 能力 | 已完成 | `00dacc9`、`375fc95`、`fcae104`、`af38b3a` |
 | P4 | M5 真实任务 | 已完成 | `04473ee` |
-| P5 | M6 前端闭环 | 已完成 | M6 本文件所在提交 |
-| P6 | M7 生产加固 | 未开始 | — |
+| P5 | M6 前端闭环 | 已完成 | `8cf26cf` |
+| P6 | M7 生产加固 | 已完成 | M7 本文件所在提交 |
 | P7 | M8 私网 API 验证 | 未开始 | — |
 
 ## M1：Compute 契约、GPU inventory 与 heartbeat
@@ -180,5 +180,33 @@ H100 真实验证（2026-07-31）：
 - `uv run pytest`：47 项通过、2 项外部依赖集成按环境开关跳过；PostgreSQL + Redis 开关全部启用时 49 项通过；
 - `pnpm --filter @oneiroi/web e2e`：Chromium 与 mobile Chromium 合计 9 项通过、1 项按 desktop/mobile 条件跳过；
 - `git diff --check` 与敏感文件模式扫描：通过。
+
+未解决阻塞：无。
+
+## M7：Redis Runner 执行链、故障恢复与生产边界
+
+已验证实现：
+
+- Gateway 使用 Redis bootstrap/per-slot streams 下发完整 PipelineSpec、job 和 unload；Runner 通过稳定 consumer 恢复未 ACK 消息，command result 使用 command ID 幂等缓存；
+- lease fencing token 进入 load/job/unload 全链，Runner 拒绝 stale token；Redis lease 周期续租，release 使用 Lua compare-and-delete，旧 session 不能删除重新取得的 lease；
+- release 只有在 Model Worker 退出且 NVML 显存验证通过后才清 lease；显存未回落时 slot/session 显式失败并继续续租；
+- Runner 在真实 adapter load 前校验 checkpoint、upsampler、LoRA SHA256 和 Gemma 目录；完整 PipelineSpec identity 新增 LoRA hash；
+- Compute session/slot snapshot 持久化到 PostgreSQL；Gateway 重启通过 PostgreSQL + live Redis lease 恢复 session、slot 和 fencing token；非终态 Job 重新附着 Redis event stream；
+- job attempt 在 succeeded/failed/cancelled 时写入 terminal status、finished time、worker PID、warm start、峰值显存和生成耗时；
+- Runner heartbeat monitor 自动处理 heartbeat loss；Redis dispatch/renewal 不可用均产生明确错误，不留下 busy slot 或伪装 ready；
+- 默认 24 小时 Compute idle TTL 使用 `when_idle` 自动释放；4 slot 并发容量测试确认每卡最多一个任务；
+- 故障测试覆盖 OOM 后 Worker 复用、子进程崩溃、unload TERM escalation、stale release、外部占用 GPU、Gateway restart 和 Redis failure；
+- production BFF 只接受可信 cookie identity，production Gateway 拒绝空身份；Compute create/release 使用 owner hash 审计；production Runner 拒绝 root 用户；
+- 详细验证记录见 `docs/ltx-backend-plan/m7-reliability-validation.md`。
+
+自动化检查：
+
+- `uv run ruff check .`：通过；
+- `uv run pytest`：不启用外部依赖时通过，PostgreSQL + Redis 开关全部启用时 68 项通过；
+- Redis Gateway → fake Runner → Model Worker → Job event → release 集成链通过，并验证错误 fencing token 被拒绝；
+- PostgreSQL active Compute session restore、inflight Job 恢复和 attempt terminal persistence 通过；
+- `pnpm check`、`git diff --check` 和敏感文件模式扫描：通过。
+
+真实 H100：本阶段只完成故障/容量自动化，不加载真实模型；真实 loopback Fast I2V 和 release 在 M8 执行。
 
 未解决阻塞：无。

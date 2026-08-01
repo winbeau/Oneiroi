@@ -83,13 +83,16 @@ class ModelWorkerSupervisor:
         self.state = GpuState.LOADING
         context = mp.get_context("spawn")
         parent, child = context.Pipe()
+        adapter_name = self.adapter_name
+        if adapter_name == "auto":
+            adapter_name = "ltx23-hq" if spec.tier.value == "hq" else "ltx23-fast"
         process = context.Process(
             target=worker_process_main,
             kwargs={
                 "connection": child,
                 "gpu_id": self.gpu_id,
                 "spec_payload": spec.model_dump(mode="json", by_alias=True),
-                "adapter_name": self.adapter_name,
+                "adapter_name": adapter_name,
                 "storage_root": str(self.storage_root),
             },
             name=f"oneiroi-model-worker-{self.physical_index}",

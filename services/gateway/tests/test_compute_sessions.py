@@ -37,7 +37,8 @@ def compute_app():
 
 
 @pytest.mark.asyncio
-async def test_one_gpu_session_loads_fast_and_releases(compute_app) -> None:
+async def test_one_gpu_session_loads_fast_and_releases(compute_app, caplog) -> None:
+    caplog.set_level("INFO", logger="oneiroi.audit")
     app, backend = compute_app
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -70,6 +71,10 @@ async def test_one_gpu_session_loads_fast_and_releases(compute_app) -> None:
 
     assert len(backend.loaded) == 1
     assert len(backend.released) == 1
+    audit_messages = [record.message for record in caplog.records if record.name == "oneiroi.audit"]
+    assert any("action=compute.create" in message for message in audit_messages)
+    assert any("action=compute.release" in message for message in audit_messages)
+    assert all("demo-user" not in message for message in audit_messages)
 
 
 @pytest.mark.asyncio

@@ -47,6 +47,10 @@ class JobAttemptRecord:
     error_code: str | None
     created_at: datetime
     finished_at: datetime | None = None
+    peak_vram_mib: int | None = None
+    load_seconds: float | None = None
+    generation_seconds: float | None = None
+    encoding_seconds: float | None = None
 
 
 class StudioRepository(Protocol):
@@ -76,11 +80,15 @@ class StudioRepository(Protocol):
 
     async def list_jobs(self, owner_id: str) -> list[JobResponse]: ...
 
+    async def list_incomplete_jobs(self) -> list[StoredJob]: ...
+
     async def get_job(self, owner_id: str, job_id: str) -> StoredJob: ...
 
     async def update_job(self, job: StoredJob) -> JobResponse: ...
 
     async def add_attempt(self, attempt: JobAttemptRecord) -> None: ...
+
+    async def update_attempt(self, attempt: JobAttemptRecord) -> None: ...
 
     async def list_attempts(self, job_id: str) -> list[JobAttemptRecord]: ...
 
@@ -189,6 +197,9 @@ class InMemoryStudioRepository:
             reverse=True,
         )
 
+    async def list_incomplete_jobs(self) -> list[StoredJob]:
+        return [job for job in self.jobs.values() if not job.response.stage.is_terminal]
+
     async def get_job(self, owner_id: str, job_id: str) -> StoredJob:
         job = self.jobs.get(job_id)
         if job is None or job.owner_id != owner_id:
@@ -203,6 +214,15 @@ class InMemoryStudioRepository:
     async def add_attempt(self, attempt: JobAttemptRecord) -> None:
         async with self._lock:
             self.attempts.setdefault(attempt.job_id, []).append(attempt)
+
+    async def update_attempt(self, attempt: JobAttemptRecord) -> None:
+        async with self._lock:
+            items = self.attempts.get(attempt.job_id, [])
+            for index, item in enumerate(items):
+                if item.id == attempt.id:
+                    items[index] = attempt
+                    return
+        raise KeyError(attempt.id)
 
     async def list_attempts(self, job_id: str) -> list[JobAttemptRecord]:
         return list(self.attempts.get(job_id, []))

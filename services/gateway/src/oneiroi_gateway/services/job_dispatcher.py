@@ -36,4 +36,8 @@ class RedisJobDispatcher:
         job_id: str,
         payload: dict[str, object],
     ) -> None:
-        await self.streams.publish_job(reservation.slot_id, job_id, payload)
+        await self.streams.publish_job(
+            reservation.slot_id,
+            job_id,
+            {**payload, "fencingToken": reservation.fencing_token},
+        )

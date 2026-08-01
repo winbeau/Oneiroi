@@ -27,6 +27,8 @@ class LeaseStore(Protocol):
         allow_partial: bool,
     ) -> list[Lease]: ...
 
+    async def renew_session(self, session_id: str, *, ttl_seconds: float) -> list[str]: ...
+
     async def release_gpu(self, gpu_id: str, session_id: str) -> bool: ...
 
     async def release_session(self, session_id: str) -> list[str]: ...
@@ -65,6 +67,23 @@ class InMemoryLeaseStore:
             ]
             self._leases.update({lease.gpu_id: lease for lease in leases})
             return leases
+
+    async def renew_session(self, session_id: str, *, ttl_seconds: float) -> list[str]:
+        async with self._lock:
+            self._remove_expired()
+            expires_at = time.monotonic() + ttl_seconds
+            renewed: list[str] = []
+            for gpu_id, lease in list(self._leases.items()):
+                if lease.session_id != session_id:
+                    continue
+                self._leases[gpu_id] = Lease(
+                    gpu_id=gpu_id,
+                    session_id=session_id,
+                    fencing_token=lease.fencing_token,
+                    expires_at_monotonic=expires_at,
+                )
+                renewed.append(gpu_id)
+            return renewed
 
     async def release_gpu(self, gpu_id: str, session_id: str) -> bool:
         async with self._lock:
@@ -124,6 +143,33 @@ for _, key in ipairs(selected) do
 end
 return result
 """
+    _renew_script = """
+local session_id = ARGV[1]
+local ttl_ms = tonumber(ARGV[2])
+local renewed = {}
+for _, key in ipairs(KEYS) do
+  local payload = redis.call('GET', key)
+  if payload then
+    local value = cjson.decode(payload)
+    if value.sessionId == session_id then
+      redis.call('PEXPIRE', key, ttl_ms)
+      table.insert(renewed, key)
+    end
+  end
+end
+return renewed
+"""
+    _release_script = """
+local payload = redis.call('GET', KEYS[1])
+if not payload then
+  return 0
+end
+local value = cjson.decode(payload)
+if value.sessionId ~= ARGV[1] then
+  return 0
+end
+return redis.call('DEL', KEYS[1])
+"""
 
     def __init__(self, redis_url: str) -> None:
         from redis.asyncio import Redis
@@ -165,19 +211,27 @@ return result
             )
         return leases
 
+    async def renew_session(self, session_id: str, *, ttl_seconds: float) -> list[str]:
+        keys = [key async for key in self.client.scan_iter(f"{LEASE_PREFIX}*")]
+        if not keys:
+            return []
+        renewed = await self.client.eval(
+            self._renew_script,
+            len(keys),
+            *keys,
+            session_id,
+            int(ttl_seconds * 1000),
+        )
+        return [key.removeprefix(LEASE_PREFIX) for key in renewed]
+
     async def release_gpu(self, gpu_id: str, session_id: str) -> bool:
         key = f"{LEASE_PREFIX}{gpu_id}"
-        payload = await self.client.get(key)
-        if not payload or json.loads(payload).get("sessionId") != session_id:
-            return False
-        return bool(await self.client.delete(key))
+        return bool(await self.client.eval(self._release_script, 1, key, session_id))
 
     async def release_session(self, session_id: str) -> list[str]:
         released: list[str] = []
         async for key in self.client.scan_iter(f"{LEASE_PREFIX}*"):
-            payload = await self.client.get(key)
-            if payload and json.loads(payload).get("sessionId") == session_id:
-                await self.client.delete(key)
+            if await self.client.eval(self._release_script, 1, key, session_id):
                 released.append(key.removeprefix(LEASE_PREFIX))
         return released
 

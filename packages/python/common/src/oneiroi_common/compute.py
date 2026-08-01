@@ -122,6 +122,7 @@ class PipelineSpec(ContractModel):
     gemma_root: str
     gemma_revision: str
     lora_paths_and_scales: tuple[tuple[str, float], ...] = ()
+    lora_sha256s: tuple[str, ...] = ()
     quantization: Literal["fp8-cast", "none"] = "fp8-cast"
     offload: Literal["none", "cpu"] = "none"
     dtype: str = "bfloat16"

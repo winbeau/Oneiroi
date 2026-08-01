@@ -2,12 +2,15 @@ import asyncio
 import json
 import shutil
 import subprocess
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from oneiroi_common.generation import GenerationResult
 from oneiroi_common.studio import GenerationDraft
+from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
 
 ExecutionEvent = Callable[[str, int, dict[str, object]], Awaitable[None]]
 CancelCheck = Callable[[], bool]
@@ -31,6 +34,65 @@ class JobExecutor(Protocol):
         on_event: ExecutionEvent,
         is_cancelled: CancelCheck,
     ) -> JobExecutionResult: ...
+
+
+class RedisJobExecutor:
+    def __init__(self, streams: RedisDirectedStreams, *, timeout_seconds: float) -> None:
+        self.streams = streams
+        self.timeout_seconds = timeout_seconds
+
+    async def execute(
+        self,
+        job_id: str,
+        draft: GenerationDraft,
+        job_directory: Path,
+        input_paths: tuple[Path | None, Path | None],
+        on_event: ExecutionEvent,
+        is_cancelled: CancelCheck,
+    ) -> JobExecutionResult:
+        del draft, input_paths
+        cursor = "0-0"
+        deadline = time.monotonic() + self.timeout_seconds
+        cancel_path = job_directory / "control" / "cancel_requested"
+        while True:
+            if is_cancelled():
+                cancel_path.parent.mkdir(parents=True, exist_ok=True)
+                cancel_path.touch(exist_ok=True)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError("RUNNER_JOB_TIMEOUT")
+            events = await self.streams.read_job_events(
+                job_id,
+                cursor,
+                block_milliseconds=max(1, int(min(remaining, 1) * 1000)),
+            )
+            for message_id, event_type, payload in events:
+                cursor = message_id
+                if event_type == "progress":
+                    await on_event(
+                        str(payload.get("phase", "generating")),
+                        int(payload.get("progress", 0)),
+                        dict(payload.get("details") or {}),
+                    )
+                elif event_type == "succeeded":
+                    result = GenerationResult.model_validate(payload["result"])
+                    result.validate_paths_within(job_directory)
+                    return JobExecutionResult(
+                        output_path=Path(result.output_path),
+                        manifest_path=Path(result.manifest_path),
+                        warm_start=result.warm_start,
+                        metrics={
+                            "elapsedSeconds": result.elapsed_seconds,
+                            "peakVramMiB": result.peak_vram_mib,
+                            "workerPid": result.worker_pid,
+                        },
+                    )
+                elif event_type == "cancelled":
+                    raise asyncio.CancelledError
+                elif event_type == "failed":
+                    code = str(payload.get("error") or "INFERENCE_FAILED")
+                    message = str(payload.get("message") or code)
+                    raise RuntimeError(f"{code}: {message}")
 
 
 class FakeJobExecutor:

@@ -55,6 +55,7 @@ def hq_pipeline_spec(paths: LtxProfilePaths) -> PipelineSpec:
         gemmaRoot=paths.gemma_root,
         gemmaRevision=paths.gemma_revision,
         loraPathsAndScales=((paths.distilled_lora_path, 1.0),),
+        loraSha256s=(paths.distilled_lora_sha256,),
         quantization="fp8-cast",
         offload="none",
         dtype="bfloat16",

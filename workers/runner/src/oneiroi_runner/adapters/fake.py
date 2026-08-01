@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -29,6 +30,10 @@ class FakePipelineAdapter:
         progress: ProgressCallback,
         is_cancelled: CancelCheck,
     ) -> dict[str, object]:
+        if "[oom]" in request.prompt:
+            raise RuntimeError("CUDA_OUT_OF_MEMORY")
+        if "[crash]" in request.prompt:
+            os._exit(86)
         for phase, percentage in (
             ("preparing", 20),
             ("prompt_encoding", 35),
@@ -74,6 +79,8 @@ class FakePipelineAdapter:
         }
 
     def close(self) -> None:
+        if self.spec and self.spec.profile_id == "fake-unload-hang":
+            time.sleep(5)
         self.spec = None
 
 

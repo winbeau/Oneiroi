@@ -7,8 +7,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
-from oneiroi_common.compute import GpuInfo, GpuState
+from oneiroi_common.compute import ComputeSessionCreate, ComputeSessionRelease, GpuInfo, GpuState
+from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.main import create_app
+from oneiroi_gateway.redis.leases import InMemoryLeaseStore
+from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
 from oneiroi_gateway.services.compute_sessions import ComputeSessionService, RecordingComputeBackend
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService, InMemoryInventoryProvider
 from oneiroi_gateway.services.job_execution import FakeJobExecutor
@@ -41,6 +44,51 @@ def components():
         )
     )
     return inventory, ComputeSessionService(inventory, RecordingComputeBackend())
+
+
+@pytest.mark.asyncio
+async def test_active_compute_session_restores_with_live_lease() -> None:
+    owner = f"compute-postgres-{uuid4().hex}"
+    inventory, _ = components()
+    engine = create_engine(DATABASE_URL)
+    state_repository = SqlComputeStateRepository(create_session_factory(engine))
+    leases = InMemoryLeaseStore()
+    first = ComputeSessionService(
+        inventory,
+        RecordingComputeBackend(),
+        leases=leases,
+        state_repository=state_repository,
+    )
+    created = await first.create(owner, ComputeSessionCreate(requestedGpuCount=1))
+    await first.close()
+
+    second = ComputeSessionService(
+        inventory,
+        RecordingComputeBackend(),
+        leases=leases,
+        state_repository=state_repository,
+    )
+    restored = await second.restore()
+
+    assert restored == [created.id]
+    assert second.get(owner, created.id).slots[0].state is GpuState.READY
+    assert second.fencing_token(created.slots[0].id)
+    await second.release(owner, created.id, ComputeSessionRelease())
+    await second.close()
+
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "DELETE FROM gpu_slots WHERE compute_session_id IN "
+                "(SELECT id FROM compute_sessions WHERE owner_id = :owner)"
+            ),
+            {"owner": owner},
+        )
+        await connection.execute(
+            text("DELETE FROM compute_sessions WHERE owner_id = :owner"),
+            {"owner": owner},
+        )
+    await engine.dispose()
 
 
 @pytest.mark.asyncio

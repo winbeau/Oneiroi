@@ -1,10 +1,15 @@
-from fastapi import APIRouter, FastAPI
+import asyncio
+from contextlib import asynccontextmanager
+
+from fastapi import APIRouter, FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 from oneiroi_common.api import ServiceHealth
 from oneiroi_common.jobs import QueueTier
 from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
 from oneiroi_gateway.redis.leases import RedisLeaseStore
+from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
 from oneiroi_gateway.repositories.sql_studio import SqlStudioRepository
 from oneiroi_gateway.repositories.studio import InMemoryStudioRepository, StudioRepository
 from oneiroi_gateway.routes.assets import create_asset_router
@@ -28,9 +33,12 @@ from oneiroi_gateway.services.job_dispatcher import (
     JobDispatcher,
     RedisJobDispatcher,
 )
-from oneiroi_gateway.services.job_execution import JobExecutor
+from oneiroi_gateway.services.job_execution import JobExecutor, RedisJobExecutor
 from oneiroi_gateway.services.job_scheduler import JobScheduler
 from oneiroi_gateway.services.job_service import JobService
+from oneiroi_gateway.services.pipeline_profiles import PipelineProfileCatalog
+from oneiroi_gateway.services.runner_backend import RedisComputeBackend
+from oneiroi_gateway.services.runner_heartbeats import RunnerHeartbeatMonitor
 from oneiroi_gateway.settings import GatewaySettings, get_settings
 
 __version__ = "0.1.0"
@@ -48,6 +56,7 @@ def create_app(
     job_service: JobService | None = None,
 ) -> FastAPI:
     app_settings = settings or get_settings()
+    managed_compute_service = compute_session_service is None
     if inventory_service is None:
         provider = (
             NvmlInventoryProvider(
@@ -59,36 +68,66 @@ def create_app(
             else InMemoryInventoryProvider()
         )
         inventory_service = GpuInventoryService(provider)
+    if app_settings.redis_runner_backend_enabled and not app_settings.redis_leases_enabled:
+        raise RuntimeError("Redis Runner backend requires Redis GPU leases")
+    redis_streams = (
+        RedisDirectedStreams(app_settings.redis_url)
+        if app_settings.redis_runner_backend_enabled
+        or app_settings.redis_job_streams_enabled
+        else None
+    )
     if compute_session_service is None:
+        compute_backend = (
+            RedisComputeBackend(
+                redis_streams,
+                PipelineProfileCatalog.from_settings(app_settings),
+                command_timeout_seconds=app_settings.runner_command_timeout_seconds,
+            )
+            if app_settings.redis_runner_backend_enabled and redis_streams is not None
+            else UnavailableComputeBackend()
+        )
         compute_session_service = ComputeSessionService(
             inventory_service,
-            UnavailableComputeBackend(),
+            compute_backend,
             leases=(
                 RedisLeaseStore(app_settings.redis_url)
                 if app_settings.redis_leases_enabled
                 else None
             ),
+            lease_ttl_seconds=app_settings.redis_lease_ttl_seconds,
+            idle_ttl_seconds=app_settings.compute_idle_ttl_seconds,
         )
     capability_service = capability_service or CapabilityService()
     database_engine = None
+    database_sessions = None
     if repository is None:
         if app_settings.persistence_enabled:
             database_engine = create_engine(app_settings.database_url)
-            repository = SqlStudioRepository(create_session_factory(database_engine))
+            database_sessions = create_session_factory(database_engine)
+            repository = SqlStudioRepository(database_sessions)
         else:
             repository = InMemoryStudioRepository()
+    if managed_compute_service and database_sessions is not None:
+        compute_session_service.state_repository = SqlComputeStateRepository(database_sessions)
     artifacts = ArtifactService(
         repository,
         app_settings.storage_root,
         max_upload_bytes=app_settings.max_upload_bytes,
     )
-    redis_streams = None
     if job_dispatcher is None:
-        if app_settings.redis_job_streams_enabled:
-            redis_streams = RedisDirectedStreams(app_settings.redis_url)
+        if redis_streams is not None and (
+            app_settings.redis_job_streams_enabled
+            or app_settings.redis_runner_backend_enabled
+        ):
             job_dispatcher = RedisJobDispatcher(redis_streams)
         else:
             job_dispatcher = InMemoryJobDispatcher()
+    if job_executor is None and app_settings.redis_runner_backend_enabled:
+        assert redis_streams is not None
+        job_executor = RedisJobExecutor(
+            redis_streams,
+            timeout_seconds=app_settings.runner_job_timeout_seconds,
+        )
     if job_service is None:
         job_service = JobService(
             repository,
@@ -99,12 +138,64 @@ def create_app(
             artifacts,
             job_executor,
         )
+    heartbeat_monitor = (
+        RunnerHeartbeatMonitor(
+            app_settings.redis_url,
+            compute_session_service,
+            timeout_seconds=app_settings.runner_heartbeat_timeout_seconds,
+        )
+        if app_settings.redis_runner_backend_enabled
+        else None
+    )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        await compute_session_service.restore()
+        await job_service.restore_inflight()
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = (
+            asyncio.create_task(
+                heartbeat_monitor.run(heartbeat_stop),
+                name="runner-heartbeat-monitor",
+            )
+            if heartbeat_monitor is not None
+            else None
+        )
+        try:
+            yield
+        finally:
+            if heartbeat_task is not None and heartbeat_monitor is not None:
+                await heartbeat_monitor.stop(heartbeat_task, heartbeat_stop)
+            await job_service.close()
+            await compute_session_service.close()
+            if redis_streams is not None:
+                await redis_streams.close()
+            if database_engine is not None:
+                await database_engine.dispose()
+
     app = FastAPI(
         title="Oneiroi Studio Gateway",
         version=__version__,
         docs_url="/docs" if app_settings.environment == "development" else None,
         redoc_url=None,
+        lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def require_private_identity(request: Request, call_next):
+        protected = request.url.path.startswith("/v1/") and not request.url.path.startswith(
+            "/v1/system/"
+        )
+        if (
+            app_settings.environment != "development"
+            and protected
+            and not request.headers.get("X-Oneiroi-User", "").strip()
+        ):
+            return JSONResponse(
+                {"detail": "AUTHENTICATION_REQUIRED"},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        return await call_next(request)
 
     system_router = APIRouter(tags=["system"])
 

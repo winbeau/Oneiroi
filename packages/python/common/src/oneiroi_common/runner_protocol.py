@@ -1,9 +1,16 @@
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
 from oneiroi_common.compute import ContractModel, PipelineSpec
+
+RUNNER_CONTROL_STREAM_TEMPLATE = "oneiroi:gpu:{gpu_id}:control"
+SLOT_CONTROL_STREAM_TEMPLATE = "oneiroi:slot:{slot_id}:control"
+SLOT_JOB_STREAM_TEMPLATE = "oneiroi:slot:{slot_id}:jobs"
+JOB_EVENT_STREAM_TEMPLATE = "oneiroi:job:{job_id}:events"
+COMMAND_RESULT_STREAM_TEMPLATE = "oneiroi:command:{command_id}:result"
+HEARTBEAT_STREAM = "oneiroi:runner:heartbeats"
 
 
 class RunnerCommandType(StrEnum):
@@ -21,6 +28,13 @@ class RunnerCommand(ContractModel):
     pipeline_spec: PipelineSpec | None = None
     job_id: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunnerCommandResult(ContractModel):
+    command_id: str
+    status: Literal["succeeded", "failed"]
+    payload: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
 
 
 class RunnerHeartbeat(ContractModel):

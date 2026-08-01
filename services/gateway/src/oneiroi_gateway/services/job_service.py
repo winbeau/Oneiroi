@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -53,6 +54,15 @@ class JobService:
         self._cancel_requested: set[str] = set()
         self._reservations: dict[str, SlotReservation] = {}
         self._tasks: set[asyncio.Task[None]] = set()
+        self._shutting_down = False
+
+    async def close(self) -> None:
+        self._shutting_down = True
+        tasks = list(self._tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def create(self, owner_id: str, payload: JobCreate) -> JobResponse:
         await self.repository.get_conversation(owner_id, payload.conversation_id)
@@ -78,8 +88,56 @@ class JobService:
         stored = StoredJob(owner_id=owner_id, response=response)
         await self.repository.create_job(stored)
         await self._event(stored, "job.queued")
-        await self._assign_and_dispatch(stored, input_paths)
+        try:
+            await self._assign_and_dispatch(stored, input_paths)
+        except Exception as exc:
+            await self._mark_dispatch_failed(stored, exc)
+            raise
         return stored.response.model_copy(deep=True)
+
+    async def restore_inflight(self) -> list[str]:
+        if self.executor is None:
+            return []
+        restored: list[str] = []
+        for stored in await self.repository.list_incomplete_jobs():
+            try:
+                session = self.sessions.get(
+                    stored.owner_id,
+                    stored.response.compute_session_id,
+                )
+                if stored.response.gpu is None:
+                    raise RuntimeError("JOB_HAS_NO_GPU_ASSIGNMENT")
+                slot = next(
+                    item
+                    for item in session.slots
+                    if item.gpu_id == stored.response.gpu.id
+                )
+                reservation = SlotReservation(
+                    session_id=session.id,
+                    slot_id=slot.id,
+                    gpu_id=slot.gpu_id,
+                    physical_index=slot.physical_index,
+                    profile=stored.response.draft.profile,
+                    fencing_token=self.sessions.fencing_token(slot.id),
+                )
+                await self.scheduler.restore(reservation)
+                self._reservations[stored.response.id] = reservation
+                if stored.response.stage is JobStatus.CANCEL_REQUESTED:
+                    self._cancel_requested.add(stored.response.id)
+                input_paths = await self._input_paths_from_draft(
+                    stored.owner_id,
+                    stored.response.draft,
+                )
+                task = asyncio.create_task(
+                    self._execute(stored, reservation, input_paths),
+                    name=f"restore-{stored.response.id}",
+                )
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
+                restored.append(stored.response.id)
+            except Exception as exc:
+                await self._mark_dispatch_failed(stored, exc)
+        return restored
 
     async def list(self, owner_id: str) -> list[JobResponse]:
         return await self.repository.list_jobs(owner_id)
@@ -99,6 +157,7 @@ class JobService:
         if immediately_cancellable and self.executor is None:
             await self._update(stored, stage=JobStatus.CANCELLED, progress=stored.response.progress)
             await self._event(stored, "job.cancelled")
+            await self._finish_attempt(stored, "cancelled")
             reservation = self._reservations.pop(job_id, None)
             if reservation is not None:
                 await self.scheduler.release(reservation)
@@ -134,7 +193,11 @@ class JobService:
         await self.repository.update_job(stored)
         await self._event(stored, "job.retry_queued")
         input_paths = await self._input_paths_from_draft(owner_id, stored.response.draft)
-        await self._assign_and_dispatch(stored, input_paths)
+        try:
+            await self._assign_and_dispatch(stored, input_paths)
+        except Exception as exc:
+            await self._mark_dispatch_failed(stored, exc)
+            raise
         return stored.response.model_copy(deep=True)
 
     async def events(
@@ -201,18 +264,41 @@ class JobService:
             )
         )
         await self._event(stored, "job.assigned")
-        await self.dispatcher.dispatch(
-            reservation,
-            stored.response.id,
-            {
-                "job": stored.response.model_dump(mode="json", by_alias=True),
-                "inputPaths": [str(path) if path else None for path in input_paths],
-            },
-        )
+        try:
+            await self.dispatcher.dispatch(
+                reservation,
+                stored.response.id,
+                {
+                    "job": stored.response.model_dump(mode="json", by_alias=True),
+                    "inputPaths": [str(path) if path else None for path in input_paths],
+                },
+            )
+        except Exception:
+            self._reservations.pop(stored.response.id, None)
+            await self.scheduler.release(reservation)
+            raise
         if self.executor is not None:
             task = asyncio.create_task(self._execute(stored, reservation, input_paths))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+
+    async def _mark_dispatch_failed(self, stored: StoredJob, exc: Exception) -> None:
+        if stored.response.stage.is_terminal:
+            return
+        stored.response = stored.response.model_copy(
+            update={
+                "stage": JobStatus.FAILED,
+                "updated_at": utc_now(),
+                "error": JobError(
+                    code="DISPATCH_FAILED",
+                    message=str(exc),
+                    retryable=True,
+                ),
+            }
+        )
+        await self.repository.update_job(stored)
+        await self._event(stored, "job.failed")
+        await self._finish_attempt(stored, "failed", error_code="DISPATCH_FAILED")
 
     async def _execute(
         self,
@@ -239,8 +325,11 @@ class JobService:
                 raise asyncio.CancelledError
             await self._succeed(stored, result)
         except asyncio.CancelledError:
+            if self._shutting_down:
+                return
             await self._update(stored, stage=JobStatus.CANCELLED, progress=stored.response.progress)
             await self._event(stored, "job.cancelled")
+            await self._finish_attempt(stored, "cancelled")
         except Exception as exc:
             code = str(exc).split(":", 1)[0] or "INFERENCE_FAILED"
             stored.response = stored.response.model_copy(
@@ -252,9 +341,11 @@ class JobService:
             )
             await self.repository.update_job(stored)
             await self._event(stored, "job.failed")
+            await self._finish_attempt(stored, "failed", error_code=code)
         finally:
-            self._reservations.pop(stored.response.id, None)
-            await self.scheduler.release(reservation)
+            if not self._shutting_down:
+                self._reservations.pop(stored.response.id, None)
+                await self.scheduler.release(reservation)
 
     async def _execution_event(
         self,
@@ -308,6 +399,57 @@ class JobService:
         )
         await self.repository.update_job(stored)
         await self._event(stored, "job.succeeded")
+        await self._finish_attempt(
+            stored,
+            "succeeded",
+            warm_start=result.warm_start,
+            worker_pid=(
+                int(result.metrics["workerPid"])
+                if result.metrics.get("workerPid") is not None
+                else None
+            ),
+            peak_vram_mib=(
+                int(result.metrics["peakVramMiB"])
+                if result.metrics.get("peakVramMiB") is not None
+                else None
+            ),
+            generation_seconds=(
+                float(result.metrics["elapsedSeconds"])
+                if result.metrics.get("elapsedSeconds") is not None
+                else None
+            ),
+        )
+
+    async def _finish_attempt(
+        self,
+        stored: StoredJob,
+        status: str,
+        *,
+        error_code: str | None = None,
+        warm_start: bool | None = None,
+        worker_pid: int | None = None,
+        peak_vram_mib: int | None = None,
+        generation_seconds: float | None = None,
+    ) -> None:
+        attempts = await self.repository.list_attempts(stored.response.id)
+        current = next(
+            (item for item in attempts if item.attempt == stored.response.attempt),
+            None,
+        )
+        if current is None:
+            return
+        await self.repository.update_attempt(
+            replace(
+                current,
+                status=status,
+                error_code=error_code,
+                warm_start=warm_start,
+                worker_pid=worker_pid,
+                peak_vram_mib=peak_vram_mib,
+                generation_seconds=generation_seconds,
+                finished_at=utc_now(),
+            )
+        )
 
     async def _update(
         self,

@@ -29,4 +29,5 @@ def test_fast_and_hq_specs_are_complete_and_distinct() -> None:
     assert fast.tier is ProfileTier.FAST
     assert hq.tier is ProfileTier.HQ
     assert hq.lora_paths_and_scales == (("/models/lora.safetensors", 1.0),)
+    assert hq.lora_sha256s == ("c" * 64,)
     assert fast.identity != hq.identity

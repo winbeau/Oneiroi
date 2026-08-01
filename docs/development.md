@@ -61,15 +61,21 @@ systemctl --user status oneiroi-studio.service
 journalctl --user -u oneiroi-studio.service -f
 ```
 
-Runner 可按 GPU UUID 启动 Supervisor；显式加载 slot 后会启动隔离的 Model Worker，并按 PipelineSpec 选择真实 Fast/HQ LTX adapter：
+真实 Gateway → Redis → Runner 模式必须同时启用 PostgreSQL、Redis leases、job streams 和 Runner backend，并提供 `.env.example` 中全部 `ONEIROI_GATEWAY_LTX_*` 路径/SHA256。缺少 profile 字段时 Gateway 启动即失败，不会用未知模型继续运行。
+
+Runner 可按 GPU UUID 启动 Supervisor；显式加载 slot 后会启动隔离的 Model Worker，并按 PipelineSpec 选择真实 Fast/HQ LTX adapter。storage root 必须是 Gateway storage root 的 `jobs/` 子目录：
 
 ```bash
+ONEIROI_RUNNER_ENVIRONMENT=production \
 ONEIROI_RUNNER_NAME=runner-0 \
 ONEIROI_RUNNER_QUEUE=fast \
 ONEIROI_RUNNER_GPU_ID=GPU-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx \
 ONEIROI_RUNNER_PHYSICAL_INDEX=0 \
+ONEIROI_RUNNER_STORAGE_ROOT=/data/oneiroi/storage/jobs \
 uv run oneiroi-runner
 ```
+
+生产 Runner 拒绝 root 身份。Redis 命令携带 fencing token；Runner 不接受旧 session 的 job、cancel 或 unload。Gateway 默认每 100 秒续租 300 秒 lease，并在 24 小时无任务后执行 `when_idle` release。
 
 ## 4. 检查
 
@@ -86,7 +92,6 @@ pnpm --filter @oneiroi/web e2e
 
 ## 5. 当前后续顺序
 
-1. 完成生产配置、鉴权边界、超时、OOM、审计与运行手册；
-2. 按私网验收清单启动 Gateway、BFF 和 Runner；
-3. 验证 GET、POST、PUT、SSE、真实 I2V、授权下载与 GPU release；
-4. 确认所有服务只监听 `127.0.0.1`，不新增 Cloudflare、DNS 或路由入口。
+1. 按私网验收清单启动 Gateway、BFF 和 Runner；
+2. 验证 GET、POST、PUT、SSE、真实 I2V、授权下载与 GPU release；
+3. 确认所有服务只监听 `127.0.0.1`，不新增 Cloudflare、DNS 或路由入口。

@@ -20,7 +20,13 @@ def png_bytes() -> bytes:
     return output.getvalue()
 
 
-def workflow_app(tmp_path: Path, *, execute: bool = True):
+class FailingDispatcher:
+    async def dispatch(self, reservation, job_id, payload) -> None:
+        del reservation, job_id, payload
+        raise RuntimeError("REDIS_UNAVAILABLE")
+
+
+def workflow_app(tmp_path: Path, *, execute: bool = True, job_dispatcher=None):
     inventory = GpuInventoryService(
         InMemoryInventoryProvider(
             [
@@ -42,6 +48,7 @@ def workflow_app(tmp_path: Path, *, execute: bool = True):
         inventory_service=inventory,
         compute_session_service=sessions,
         job_executor=FakeJobExecutor() if execute else None,
+        job_dispatcher=job_dispatcher,
     )
     return app
 
@@ -113,6 +120,9 @@ async def test_conversation_upload_job_sse_and_real_mp4(tmp_path: Path) -> None:
     assert hidden.status_code == 404
     assert "event: job.succeeded" in events.text
     assert "event: job.updated" in events.text
+    attempts = await app.state.repository.list_attempts(job_id)
+    assert attempts[0].status == "succeeded"
+    assert attempts[0].finished_at is not None
 
 
 @pytest.mark.asyncio
@@ -138,6 +148,30 @@ async def test_one_card_hq_job_is_rejected_by_backend(tmp_path: Path) -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "HQ_REQUIRES_AT_LEAST_2_GPUS"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_failure_is_persisted_and_releases_slot(tmp_path: Path) -> None:
+    app = workflow_app(tmp_path, execute=False, job_dispatcher=FailingDispatcher())
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        conversation = await client.post("/v1/conversations", json={"title": "Failure"})
+        session = await client.post("/v1/compute/sessions", json={"requestedGpuCount": 1})
+        created = await client.post(
+            "/v1/jobs/i2v",
+            json={
+                "conversationId": conversation.json()["id"],
+                "computeSessionId": session.json()["id"],
+                "draft": {"prompt": "dispatch failure"},
+            },
+        )
+        jobs = await client.get("/v1/jobs")
+
+    assert created.status_code == 409
+    assert jobs.json()[0]["stage"] == "failed"
+    assert jobs.json()[0]["error"]["code"] == "DISPATCH_FAILED"
+    session_snapshot = app.state.job_service.sessions.sessions[session.json()["id"]]
+    assert session_snapshot.slots[0].state is GpuState.READY
 
 
 @pytest.mark.asyncio

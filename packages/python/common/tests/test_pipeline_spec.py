@@ -24,3 +24,7 @@ def test_pipeline_identity_covers_every_runtime_input() -> None:
     assert baseline.identity != spec(attentionBackend="flash").identity
     assert baseline.identity != spec(checkpointSha256="c" * 64).identity
     assert baseline.identity != spec(runtimePolicyVersion="v2").identity
+    assert baseline.identity != spec(
+        loraPathsAndScales=(("/models/lora.safetensors", 1.0),),
+        loraSha256s=("d" * 64,),
+    ).identity

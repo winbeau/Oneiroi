@@ -2,9 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
-from oneiroi_common.runner_protocol import RunnerHeartbeat
-
-HEARTBEAT_STREAM = "oneiroi:runner:heartbeats"
+from oneiroi_common.runner_protocol import HEARTBEAT_STREAM, RunnerHeartbeat
 
 
 class HeartbeatPublisher(Protocol):

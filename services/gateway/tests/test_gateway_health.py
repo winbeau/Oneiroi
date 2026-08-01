@@ -23,3 +23,18 @@ async def test_queue_catalog_is_bounded() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"queues": ["fast", "hq"]}
+
+
+@pytest.mark.asyncio
+async def test_production_gateway_requires_private_identity_for_v1_routes() -> None:
+    production = create_app(GatewaySettings(environment="production"))
+    transport = ASGITransport(app=production)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        missing = await client.get("/v1/compute/capabilities")
+        authenticated = await client.get(
+            "/v1/compute/capabilities",
+            headers={"X-Oneiroi-User": "owner-a"},
+        )
+
+    assert missing.status_code == 401
+    assert authenticated.status_code == 200

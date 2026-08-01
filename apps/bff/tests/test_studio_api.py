@@ -41,6 +41,26 @@ async def test_bff_proxies_conversation_put_and_preserves_owner() -> None:
 
 
 @pytest.mark.asyncio
+async def test_production_bff_requires_cookie_identity_and_ignores_dev_header() -> None:
+    gateway = create_gateway(GatewaySettings(environment="production"))
+    bff = create_bff(
+        BffSettings(environment="production", gateway_base_url="http://gateway"),
+        gateway_app=gateway,
+    )
+    transport = ASGITransport(app=bff)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        missing = await client.get(
+            "/v1/conversations",
+            headers={"X-Oneiroi-User": "untrusted-header"},
+        )
+        client.cookies.set("oneiroi_user", "owner-a")
+        authenticated = await client.get("/v1/conversations")
+
+    assert missing.status_code == 401
+    assert authenticated.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_bff_maps_gateway_unavailable_without_simulating_success() -> None:
     bff = create_bff(
         BffSettings(

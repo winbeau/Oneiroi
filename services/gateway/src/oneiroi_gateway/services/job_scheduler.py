@@ -12,6 +12,7 @@ class SlotReservation:
     gpu_id: str
     physical_index: int
     profile: ProfileTier
+    fencing_token: str
 
 
 class JobScheduler:
@@ -27,6 +28,7 @@ class JobScheduler:
         profile: ProfileTier,
     ) -> SlotReservation:
         session = self.sessions.get(owner_id, session_id)
+        self.sessions.touch(session_id)
         async with self._lock:
             candidates = sorted(
                 [
@@ -44,9 +46,29 @@ class JobScheduler:
             slot = candidates[0]
             self._busy_slots.add(slot.id)
             slot.state = GpuState.BUSY
-            return self._reservation(session.id, slot, profile)
+            reservation = self._reservation(
+                session.id,
+                slot,
+                profile,
+                self.sessions.fencing_token(slot.id),
+            )
+        await self.sessions.persist(session.id)
+        return reservation
+
+    async def restore(self, reservation: SlotReservation) -> None:
+        async with self._lock:
+            self._busy_slots.add(reservation.slot_id)
+            session = self.sessions.sessions.get(reservation.session_id)
+            if session is None:
+                raise RuntimeError("COMPUTE_SESSION_NOT_RESTORED")
+            slot = next((item for item in session.slots if item.id == reservation.slot_id), None)
+            if slot is None:
+                raise RuntimeError("COMPUTE_SLOT_NOT_RESTORED")
+            slot.state = GpuState.BUSY
+        await self.sessions.persist(reservation.session_id)
 
     async def release(self, reservation: SlotReservation) -> None:
+        self.sessions.touch(reservation.session_id)
         async with self._lock:
             self._busy_slots.discard(reservation.slot_id)
             session = self.sessions.sessions.get(reservation.session_id)
@@ -55,12 +77,14 @@ class JobScheduler:
             slot = next((item for item in session.slots if item.id == reservation.slot_id), None)
             if slot is not None and slot.state is GpuState.BUSY:
                 slot.state = GpuState.READY
+        await self.sessions.persist(reservation.session_id)
 
     @staticmethod
     def _reservation(
         session_id: str,
         slot: ComputeSlot,
         profile: ProfileTier,
+        fencing_token: str,
     ) -> SlotReservation:
         return SlotReservation(
             session_id=session_id,
@@ -68,4 +92,5 @@ class JobScheduler:
             gpu_id=slot.gpu_id,
             physical_index=slot.physical_index,
             profile=profile,
+            fencing_token=fencing_token,
         )
