@@ -51,8 +51,12 @@ pnpm dev:host
 树莓派部署/预览：
 
 ```bash
-scripts/deploy-web-pi.sh --mode preview --host 0.0.0.0 --port 4173
+ONEIROI_API_PROXY_TARGET=http://<private-bff-ip>:18000 \
+ONEIROI_API_PROXY_USER=lan-preview \
+scripts/deploy-web-pi.sh --mode preview --host <pi-lan-ip> --port 4173
 ```
+
+`ONEIROI_API_PROXY_TARGET` 同时用于 Vite dev/preview 的 `/v1` 与 `/healthz` proxy。可选的 `ONEIROI_API_PROXY_USER` 只在服务端向 private BFF 注入身份 cookie，必须同时满足以下条件：WebUI 只绑定可信 LAN 地址、BFF 只绑定可信私网接口、没有公网/Tunnel ingress。公网部署不得使用固定 LAN identity，必须接入真实认证。
 
 当前 `pi5` 部署使用用户级 `oneiroi-studio.service`，可通过以下命令检查：
 
