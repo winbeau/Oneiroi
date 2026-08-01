@@ -22,12 +22,13 @@
 - H100 私有边界：无服务断言访问 BFF/Gateway 为 401；有效 Pi 服务断言通过 H100 BFF 到 Gateway 为 200。
 - 两个稳定映射测试 owner 的实机隔离：conversation 自读 200、交叉读取双向 404、列表互不可见；测试记录已精确清理。
 - 资产实机验收：有效 PNG upload 201、10-byte Range 返回 206 与正确 `Content-Range`、另一 owner 读取 404、删除 204；畸形 PNG 返回 422 `INVALID_IMAGE`。
-- `oneiroi-studio-loopback.service` 已停止；原 LAN `oneiroi-studio.service` 暂留给可能的 `video-in` 内网依赖，不承载 `video.icthub.top` 公网流量。
+- Pi 已执行一次整机 reboot，`linger=yes` 下 BFF、Web 与 Tunnel 均自动启动。重启暴露出旧 LAN preview 重建共享 `dist` 的短暂 502 竞态；已移除 Tunnel 对旧 unit 的依赖，并彻底删除 LAN/loopback 两个旧 user units 及 `lan-preview`/`video-in` drop-ins。
+- 清理后旧 units 均为 `LoadState=not-found`，只剩 `127.0.0.1:8000` 与 `127.0.0.1:4173` listener；Web `/`、深链接、health 为 200，伪造身份 API 为 401，公网 Access challenge 仍为 302。
 
 ### 尚未声称完成的门
 
 - 尚无两个真实 Authentik 邀请用户的浏览器会话，因此真实用户登录后的 conversation/asset/job 隔离、group 拒绝与完整 SSE 流仍需人工双账号验收；当前证据覆盖 Access challenge、JWT/服务身份单测和双 owner 实机后端隔离，不伪造真实用户通过。
-- Pi 本次只完成受控 service restart 与 `linger=yes`/enabled unit 基线，尚未执行整机 reboot；reboot recovery 仍是发布后人工维护窗验收项。
+- 用户明确日常不依赖重启恢复，本次不再执行第二次 reboot；旧 units 已实时删除并验证依赖图，但不声称完成删除后的第二次冷启动复验。
 - H100 当前没有 Oneiroi Runner/LTX inference 进程；生成任务必须真实失败或显示不可用，不能把 capability 声明当作生成链路成功。
 
 ### 回滚方法
@@ -60,10 +61,10 @@
 - checkout：`/home/winbeau/oneiroi-studio`；runtime SHA：`fa7c28cc98edf423e2be8762ad13b55f606389eb`；工作区干净。
 - `oneiroi-bff.service`：active/running，监听 `127.0.0.1:8000`，验证 Cloudflare Access JWT 并签发 Pi→H100 服务断言。
 - `oneiroi-web.service`：active/running，immutable `apps/web/dist`，监听 `127.0.0.1:4173`，`/healthz` 与深链接 fallback 正常。
-- `cloudflared-video.service`：active/running，`video.icthub.top -> 127.0.0.1:4173`；未登录访问由 Access 在 origin 前挑战。
-- `oneiroi-studio-loopback.service`：inactive/dead；4174 canary 已停止。
-- `oneiroi-studio.service`：仍监听 `192.168.3.250:4173`，只为尚未确认的 `video-in` 内网兼容保留，不是公网 origin。
-- user linger 已开启，`oneiroi-bff.service` 与 `oneiroi-web.service` 均 enabled；整机 reboot 恢复尚待维护窗实测。
+- `cloudflared-video.service`：active/running，`video.icthub.top -> 127.0.0.1:4173`；仅依赖 `oneiroi-web.service`，未登录访问由 Access 在 origin 前挑战。
+- `oneiroi-studio.service` 与 `oneiroi-studio-loopback.service` 已禁用并彻底删除，均为 `LoadState=not-found`；固定 `lan-preview` 与 `video-in` drop-ins 不再存在。
+- 当前仅监听 `127.0.0.1:8000` 和 `127.0.0.1:4173`，没有 LAN 4173 或 canary 4174 listener。
+- user linger 已开启，`oneiroi-bff.service`、`oneiroi-web.service` 与 Tunnel 已在一次实机 reboot 后自动恢复；用户要求不再做第二次 reboot。
 
 ### H100 server
 
@@ -84,17 +85,17 @@ Vite 不再注入 `ONEIROI_API_PROXY_USER`，生产 BFF 不信任浏览器 cooki
 
 已验证 Access challenge/audience/深链接回跳、JWT 单测和双 owner 后端隔离；仍需两个真实邀请账号验证 Authentik group 拒绝、登录后 owner 稳定性以及 conversation/asset/job/SSE 的浏览器端互不可见。
 
-### 待维护窗：Pi reboot recovery
+### 已修复：Pi 开机 preview 竞态
 
-user linger、enabled unit、受控 restart 和 health 均通过，但整机 reboot 尚未执行。reboot 后必须确认 BFF、Web、Tunnel 自动恢复，且公网仍先经过 Access。
+首次 reboot 时，历史 `cloudflared-video.service` 依赖拉起旧 LAN preview，后者重建共享 `dist` 并造成短暂 502。Tunnel 现只依赖 immutable Web，旧 preview units/drop-ins 已彻底删除；用户要求不再安排第二次 reboot。
 
 ### 存储运行约束
 
 H100 探查时文件系统显示 100% 但仍约 9.5 GiB 可用；禁止重新下载/复制权重，attempt temp 必须及时清理并设置低水位 admission。
 
-### P1：LAN preview 兼容实例
+### 已关闭：LAN preview 与固定身份残留
 
-loopback Vite preview 已移除，但 `oneiroi-studio.service` 仍为潜在 `video-in` 内网依赖保留。确认无依赖后再停用，不能盲删 unit 或覆盖内网工作流。
+LAN/loopback preview units、`ONEIROI_API_PROXY_USER=lan-preview` 和 `video-in` host drop-in 已删除；systemd user 目录中没有相关残留，LAN 4173 listener 已消失。
 
 ### P1：Runner 不在线
 
