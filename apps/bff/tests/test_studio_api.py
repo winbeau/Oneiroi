@@ -61,7 +61,9 @@ async def test_production_bff_requires_cookie_identity_and_ignores_dev_header() 
 
 
 @pytest.mark.asyncio
-async def test_bff_maps_gateway_unavailable_without_simulating_success() -> None:
+async def test_bff_maps_gateway_unavailable_without_simulating_success(monkeypatch) -> None:
+    monkeypatch.setenv("ALL_PROXY", "socks5h://127.0.0.1:9")
+    monkeypatch.setenv("NO_PROXY", "")
     bff = create_bff(
         BffSettings(
             gateway_base_url="http://127.0.0.1:9",

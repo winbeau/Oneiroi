@@ -17,6 +17,7 @@ class GatewayClient:
             transport=transport,
             base_url=str(self.settings.gateway_base_url).rstrip("/"),
             timeout=self.settings.request_timeout_seconds,
+            trust_env=False,
         )
 
     async def request(
