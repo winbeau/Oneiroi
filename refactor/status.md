@@ -1,40 +1,36 @@
 # Oneiroi 当前状态
 
-## 它不是空仓库
+## 决策
 
-Oneiroi 已经是完整的视频生成产品 monorepo，而不只是“Agent 计划”：
+保留 Oneiroi 独立产品：React/Pi BFF、即梦式首页、Agent、conversation、素材库和产品任务历史。GPU inventory、lease、Runner supervisor 和 LTX execution 逐步迁到 `gpu-server`。
 
-- React 19/Vite 前端；
-- Pi FastAPI BFF；
-- GPU Gateway；
-- PostgreSQL、Redis lease/streams；
+## 已有实现
+
+- React 19/Vite/TanStack Query/Zustand；
+- Pi BFF 与 H100 Gateway；
+- PostgreSQL、Redis；
 - GPU session/slot/job 状态机；
-- per-GPU Runner supervisor；
-- LTX-2.3 Fast/HQ adapters；
-- SSE、取消、上传、artifact、migration 和测试。
+- Runner supervisor 与 LTX Fast/HQ adapters；
+- SSE、取消、上传、artifact、migration 和测试；
+- xju-feiyue 派生的 warm-neutral token、Motion/reduced-motion；
+- Agent 面板、conversation、素材库和任务历史页面。
 
-## 当前主要问题
+## 2026-08-01 实机状态
 
-1. `oneiroi_user` cookie 只是可伪造字符串，生产身份未完成。
-2. BFF→Gateway 没有强服务认证。
-3. Gateway/Runner 依赖 Redis 和共享本地文件路径。
-4. 现有调度能力与新 `gpu-server` 高度重复。
-5. Pi 下载 MP4 会全量缓冲到内存。
-6. Pi 生产 systemd/Caddy/cloudflared 部署未完整落地。
-7. 当前 GitHub CI 有 3 个既有后端 workflow/recovery 测试失败。
+- Pi `/home/winbeau/oneiroi-studio` 已运行 React Vite preview 和 `video.icthub.top` Tunnel。
+- Pi proxy 到 H100 BFF 的 health、conversation 和 8 GPU inventory 可用。
+- 当前固定注入 `oneiroi_user=lan-preview`，不能开放多用户。
+- 当前有两个 Vite preview 实例，尚非 immutable static production deployment。
+- H100 BFF/Gateway、Redis/PostgreSQL 正常；没有 Runner 进程。
+- H100 8 张 H100 中当前 4 张 eligible，Fast/HQ capability 声明可用。
+- H100 文件系统只剩约 9.5 GiB，是实际生成硬阻塞。
+- Pi/H100 runtime commit 不一致，需要固定同一 release。
 
-## 两条可选路线
+## 当前 P0
 
-### 保留 Oneiroi 产品
+1. `video.icthub.top/*` 加入与 ComfyUI 同级的 Cloudflare Access + Authentik OIDC。
+2. BFF 验证 Access JWT，删除固定用户 cookie。
+3. 把 React 从“页面可打开”推进到可回滚、可重启、可区分用户的安全 beta。
+4. 处理 H100 存储后再启动 gpu-server Runner/LTX 真机生成。
 
-适合仍然需要即梦式首页、conversation、素材库、Agent 提示词、任务历史和专用视频体验。保留 React/FastAPI 产品层，但把 GPU lease/Runner/LTX 调度迁到 `gpu-server`。
-
-### 并入 ComfyUI
-
-适合优先减少维护：用 ComfyUI workflow、模板和 remote LTX custom node 替代 Oneiroi 产品。可以让 `video.icthub.top` 跳转或代理到一个预配置视频工作区，然后归档 Oneiroi。
-
-代价是失去即梦式产品首页、专用素材/对话模型和独立 Agent UX。
-
-## 建议
-
-如果目标是“尽量不自建产品”，建议先用 ComfyUI + LTX workflow 验证视频生成主链路，再决定是否保留 Oneiroi。不要同时维护 Oneiroi 自带调度器和独立 gpu-server。
+完整计划见 [`production-launch.md`](./production-launch.md)，执行 Agent 从 [`START_PROMPT.md`](./START_PROMPT.md) 启动。
