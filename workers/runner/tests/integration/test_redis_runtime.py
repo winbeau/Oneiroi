@@ -12,10 +12,13 @@ from oneiroi_common.runner_protocol import (
     RUNNER_CONTROL_STREAM_TEMPLATE,
     SLOT_CONTROL_STREAM_TEMPLATE,
     SLOT_JOB_STREAM_TEMPLATE,
+    RunnerCommand,
+    RunnerCommandType,
     RunnerHeartbeat,
 )
 from oneiroi_common.studio import GenerationDraft
 from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
+from oneiroi_gateway.redis.leases import RedisLeaseStore
 from oneiroi_gateway.services.job_execution import RedisJobExecutor
 from oneiroi_gateway.services.pipeline_profiles import PipelineProfileCatalog
 from oneiroi_gateway.services.runner_backend import RedisComputeBackend
@@ -50,6 +53,7 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
     slot_id = f"slot-runtime-{suffix}"
     session_id = f"compute-runtime-{suffix}"
     job_id = f"job-runtime-{suffix}"
+    stale_command_id = f"command-stale-{suffix}"
     redis_url = os.getenv("ONEIROI_GATEWAY_REDIS_URL", "redis://127.0.0.1:6379/0")
     settings = RunnerSettings(
         redis_url=redis_url,
@@ -84,6 +88,7 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
 
     runtime = RedisRunnerRuntime(settings, supervisor, heartbeat_factory=heartbeat)
     streams = RedisDirectedStreams(redis_url)
+    leases = RedisLeaseStore(redis_url)
     backend = RedisComputeBackend(
         streams,
         PipelineProfileCatalog(fast=spec(ProfileTier.FAST), hq=spec(ProfileTier.HQ)),
@@ -93,6 +98,35 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
     runtime_task = asyncio.create_task(runtime.run(stop_event))
     try:
         await asyncio.sleep(0.05)
+        stale_command = RunnerCommand(
+            commandId=stale_command_id,
+            commandType=RunnerCommandType.LOAD_PROFILE,
+            slotId=slot_id,
+            pipelineSpec=spec(ProfileTier.FAST),
+            payload={
+                "sessionId": session_id,
+                "gpuId": gpu_id,
+                "fencingToken": "stale-token",
+            },
+        )
+        await streams.publish_runner_command(gpu_id, stale_command)
+        stale_result = await streams.wait_command_result(
+            stale_command_id,
+            timeout_seconds=10,
+        )
+        assert stale_result.status == "failed"
+        assert stale_result.error == "FENCING_TOKEN_MISMATCH"
+        assert supervisor.worker_pid is None
+
+        lease = (
+            await leases.acquire(
+                [gpu_id],
+                1,
+                session_id,
+                ttl_seconds=60,
+                allow_partial=False,
+            )
+        )[0]
         loaded = await backend.load_slot(
             session_id,
             slot_id,
@@ -104,7 +138,7 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
                 eligible=True,
             ),
             ProfileTier.FAST,
-            "fencing-test",
+            lease.fencing_token,
         )
         assert loaded["workerPid"] == supervisor.worker_pid
 
@@ -136,7 +170,7 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
             slot_id,
             job_id,
             {
-                "fencingToken": "fencing-test",
+                "fencingToken": lease.fencing_token,
                 "job": {
                     "id": job_id,
                     "draft": draft.model_dump(mode="json", by_alias=True),
@@ -164,11 +198,13 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
                 state=GpuState.READY,
                 profile=ProfileTier.FAST,
             ),
-            "fencing-test",
+            lease.fencing_token,
         )
         assert released
         assert supervisor.worker_pid is None
     finally:
+        await leases.release_session(session_id)
+        await leases.close()
         stop_event.set()
         await asyncio.wait_for(runtime_task, timeout=5)
         keys = [
@@ -177,6 +213,7 @@ async def test_redis_gateway_runner_load_job_and_release(tmp_path: Path) -> None
             SLOT_JOB_STREAM_TEMPLATE.format(slot_id=slot_id),
             JOB_EVENT_STREAM_TEMPLATE.format(job_id=job_id),
             JOB_EVENT_STREAM_TEMPLATE.format(job_id=f"job-fenced-{suffix}"),
+            f"oneiroi:runner:command-result:{stale_command_id}",
         ]
         if keys:
             await streams.client.delete(*keys)

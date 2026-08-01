@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import uuid4
 
-LEASE_PREFIX = "oneiroi:gpu:lease:"
+from oneiroi_common.runner_protocol import GPU_LEASE_KEY_PREFIX
+
+LEASE_PREFIX = GPU_LEASE_KEY_PREFIX
 
 
 @dataclass(frozen=True, slots=True)

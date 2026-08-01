@@ -10,6 +10,7 @@ from redis.exceptions import ResponseError
 
 from oneiroi_common.generation import InternalI2VRequest
 from oneiroi_common.runner_protocol import (
+    GPU_LEASE_KEY_PREFIX,
     JOB_EVENT_STREAM_TEMPLATE,
     RUNNER_CONTROL_STREAM_TEMPLATE,
     SLOT_CONTROL_STREAM_TEMPLATE,
@@ -88,12 +89,19 @@ class RedisRunnerRuntime:
         if command.pipeline_spec is None:
             await self._result(command, status="failed", error="PIPELINE_SPEC_REQUIRED")
             return
+        if not await self._lease_matches(command):
+            await self._result(command, status="failed", error="FENCING_TOKEN_MISMATCH")
+            return
         cached = await self._cached_result(command.command_id)
         if cached is not None:
             await self._publish_result(cached)
             return
         try:
             ready = await self.supervisor.load(command.pipeline_spec)
+            if not await self._lease_matches(command):
+                await self.supervisor.release()
+                await self._result(command, status="failed", error="FENCING_TOKEN_MISMATCH")
+                return
             self.current_slot_id = command.slot_id
             self.current_session_id = str(command.payload.get("sessionId") or "")
             self.current_fencing_token = str(command.payload.get("fencingToken") or "")
@@ -272,6 +280,21 @@ class RedisRunnerRuntime:
             payload.get("gpuId") == self.settings.gpu_id
             and payload.get("sessionId") == self.current_session_id
             and payload.get("fencingToken") == self.current_fencing_token
+        )
+
+    async def _lease_matches(self, command: RunnerCommand) -> bool:
+        payload = command.payload
+        value = await self.client.get(f"{GPU_LEASE_KEY_PREFIX}{self.settings.gpu_id}")
+        if value is None:
+            return False
+        try:
+            lease = json.loads(value)
+        except (TypeError, ValueError):
+            return False
+        return (
+            payload.get("gpuId") == self.settings.gpu_id
+            and payload.get("sessionId") == lease.get("sessionId")
+            and payload.get("fencingToken") == lease.get("fencingToken")
         )
 
     async def _heartbeat(self) -> RunnerHeartbeat:

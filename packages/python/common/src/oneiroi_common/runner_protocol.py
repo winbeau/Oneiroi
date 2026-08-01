@@ -11,6 +11,7 @@ SLOT_JOB_STREAM_TEMPLATE = "oneiroi:slot:{slot_id}:jobs"
 JOB_EVENT_STREAM_TEMPLATE = "oneiroi:job:{job_id}:events"
 COMMAND_RESULT_STREAM_TEMPLATE = "oneiroi:command:{command_id}:result"
 HEARTBEAT_STREAM = "oneiroi:runner:heartbeats"
+GPU_LEASE_KEY_PREFIX = "oneiroi:gpu:lease:"
 
 
 class RunnerCommandType(StrEnum):
