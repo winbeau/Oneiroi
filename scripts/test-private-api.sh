@@ -5,6 +5,7 @@ BASE_URL="${ONEIROI_PRIVATE_API_BASE_URL:-http://127.0.0.1:18000}"
 OWNER="${ONEIROI_PRIVATE_API_OWNER:-private-api-smoke}"
 RUN_GPU="${ONEIROI_PRIVATE_API_GPU:-0}"
 FIRST_FRAME="${ONEIROI_PRIVATE_API_FIRST_FRAME:-}"
+LAST_FRAME="${ONEIROI_PRIVATE_API_LAST_FRAME:-}"
 TIMEOUT_SECONDS="${ONEIROI_PRIVATE_API_TIMEOUT_SECONDS:-1800}"
 PYTHON_BIN="${ONEIROI_PRIVATE_API_PYTHON:-python3}"
 FIXED_IDENTITY="${ONEIROI_PRIVATE_API_FIXED_IDENTITY:-0}"
@@ -115,6 +116,10 @@ fi
     printf 'ONEIROI_PRIVATE_API_FIRST_FRAME must name an existing image\n' >&2
     exit 2
 }
+if [[ -n "$LAST_FRAME" && ! -f "$LAST_FRAME" ]]; then
+    printf 'ONEIROI_PRIVATE_API_LAST_FRAME must name an existing image\n' >&2
+    exit 2
+fi
 
 printf 'GET /v1/compute/gpus\n'
 INVENTORY="$(request "$BASE_URL/v1/compute/gpus")"
@@ -169,29 +174,42 @@ UPLOAD_RESPONSE="$(request \
     -F 'title=Private API first frame' \
     "$BASE_URL/v1/uploads/images")"
 ASSET_ID="$(printf '%s' "$UPLOAD_RESPONSE" | json_field id)"
+LAST_ASSET_ID=""
+if [[ -n "$LAST_FRAME" ]]; then
+    printf 'POST multipart last-frame image upload\n'
+    LAST_UPLOAD_RESPONSE="$(request \
+        -X POST \
+        -F "file=@$LAST_FRAME" \
+        -F 'title=Private API last frame' \
+        "$BASE_URL/v1/uploads/images")"
+    LAST_ASSET_ID="$(printf '%s' "$LAST_UPLOAD_RESPONSE" | json_field id)"
+fi
 
 printf 'POST real Fast I2V job\n'
 JOB_PAYLOAD="$("$PYTHON_BIN" -c 'import json,sys
+draft={
+  "prompt": "A cinematic transition from the supplied first frame to the supplied last frame, with stable lighting and consistent identity.",
+  "negativePrompt": "camera shake, identity change, text, watermark",
+  "queue": "fast",
+  "profile": "fast",
+  "ratio": "16:9",
+  "resolution": "720p",
+  "duration": 5,
+  "seed": 42,
+  "firstFrameAssetId": sys.argv[3],
+  "firstStrength": 1.0,
+  "lastStrength": 1.0,
+  "enhancePrompt": False,
+  "quantization": "fp8-cast",
+  "offload": "none"
+}
+if sys.argv[4]:
+    draft["lastFrameAssetId"]=sys.argv[4]
 print(json.dumps({
   "conversationId": sys.argv[1],
   "computeSessionId": sys.argv[2],
-  "draft": {
-    "prompt": "A locked-off cinematic shot with subtle natural motion, stable lighting and consistent identity.",
-    "negativePrompt": "camera shake, identity change, text, watermark",
-    "queue": "fast",
-    "profile": "fast",
-    "ratio": "16:9",
-    "resolution": "720p",
-    "duration": 5,
-    "seed": 42,
-    "firstFrameAssetId": sys.argv[3],
-    "firstStrength": 1.0,
-    "lastStrength": 1.0,
-    "enhancePrompt": False,
-    "quantization": "fp8-cast",
-    "offload": "none"
-  }
-}))' "$CONVERSATION_ID" "$SESSION_ID" "$ASSET_ID")"
+  "draft": draft
+}))' "$CONVERSATION_ID" "$SESSION_ID" "$ASSET_ID" "$LAST_ASSET_ID")"
 JOB_RESPONSE="$(request \
     -H 'Content-Type: application/json' \
     -X POST \
