@@ -11,7 +11,8 @@
 - Pi BFF 使用本机 RSA 私钥签发 60 秒服务断言；H100 BFF 与 Gateway 使用公钥验证，并校验断言 subject 与内部 owner header 一致。
 - mutation 增加同源 Origin CSRF 检查；下载转发支持 Range/If-Range/ETag/Content-Range 并采用流式响应。
 - Vite 已删除 `ONEIROI_API_PROXY_USER` 注入；新增 loopback Node 静态 origin、固定 release SHA 的 user unit 模板和显式 FFmpeg CI prerequisite 检查。
-- 本地证据：`pnpm check`、`pnpm check:api`、`uv run ruff check .`、`uv run pytest`（66 passed, 5 skipped）、静态 origin `/`、`/create?from=smoke`、`/healthz` 均通过。
+- 安全实现 release commit：`6da4f976c9143d4f880b52f055742e6ec23ce70f`（`main` 已推送）。
+- 本地证据：`pnpm check`、`pnpm check:api`、`uv run ruff check .`、`uv run pytest`（67 passed, 5 skipped）、静态 origin `/`、`/create?from=smoke`、`/healthz` 均通过。
 
 ### 远端激活门
 
