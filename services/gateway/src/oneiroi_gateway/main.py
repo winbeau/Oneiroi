@@ -8,6 +8,13 @@ from oneiroi_common.api import ServiceHealth
 from oneiroi_common.identity import SERVICE_ASSERTION_HEADER
 from oneiroi_common.jobs import QueueTier
 from oneiroi_gateway.db.session import create_engine, create_session_factory
+from oneiroi_gateway.gpu_server import (
+    GpuServerClient,
+    GpuServerComputeBackend,
+    GpuServerInventoryProvider,
+    GpuServerJobExecutor,
+    GpuServerLeaseStore,
+)
 from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
 from oneiroi_gateway.redis.leases import RedisLeaseStore
 from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
@@ -69,9 +76,20 @@ def create_app(
         clock_skew_seconds=app_settings.service_assertion_clock_skew_seconds,
     )
     managed_compute_service = compute_session_service is None
+    gpu_server_client = (
+        GpuServerClient(
+            app_settings.gpu_server_base_url,
+            app_settings.gpu_server_service_token.get_secret_value(),
+            timeout_seconds=app_settings.gpu_server_request_timeout_seconds,
+        )
+        if app_settings.gpu_server_enabled and app_settings.gpu_server_service_token is not None
+        else None
+    )
     if inventory_service is None:
         provider = (
-            NvmlInventoryProvider(
+            GpuServerInventoryProvider(gpu_server_client)
+            if gpu_server_client is not None
+            else NvmlInventoryProvider(
                 allowlist=app_settings.allowed_gpu_ids,
                 minimum_vram_mib=app_settings.gpu_minimum_vram_mib,
                 idle_vram_threshold_mib=app_settings.gpu_idle_vram_threshold_mib,
@@ -80,17 +98,33 @@ def create_app(
             else InMemoryInventoryProvider()
         )
         inventory_service = GpuInventoryService(provider)
-    if app_settings.redis_runner_backend_enabled and not app_settings.redis_leases_enabled:
+    if (
+        not app_settings.gpu_server_enabled
+        and app_settings.redis_runner_backend_enabled
+        and not app_settings.redis_leases_enabled
+    ):
         raise RuntimeError("Redis Runner backend requires Redis GPU leases")
     redis_streams = (
         RedisDirectedStreams(app_settings.redis_url)
-        if app_settings.redis_runner_backend_enabled
-        or app_settings.redis_job_streams_enabled
+        if not app_settings.gpu_server_enabled
+        and (app_settings.redis_runner_backend_enabled or app_settings.redis_job_streams_enabled)
         else None
     )
+    gpu_server_leases = None
     if compute_session_service is None:
+        gpu_server_leases = (
+            GpuServerLeaseStore(
+                gpu_server_client,
+                app_settings.redis_url,
+                mapping_ttl_seconds=app_settings.gpu_server_mapping_ttl_seconds,
+            )
+            if gpu_server_client is not None
+            else None
+        )
         compute_backend = (
-            RedisComputeBackend(
+            GpuServerComputeBackend()
+            if gpu_server_leases is not None
+            else RedisComputeBackend(
                 redis_streams,
                 PipelineProfileCatalog.from_settings(app_settings),
                 command_timeout_seconds=app_settings.runner_command_timeout_seconds,
@@ -102,14 +136,19 @@ def create_app(
             inventory_service,
             compute_backend,
             leases=(
-                RedisLeaseStore(app_settings.redis_url)
-                if app_settings.redis_leases_enabled
-                else None
+                gpu_server_leases
+                or (
+                    RedisLeaseStore(app_settings.redis_url)
+                    if app_settings.redis_leases_enabled
+                    else None
+                )
             ),
             lease_ttl_seconds=app_settings.redis_lease_ttl_seconds,
             idle_ttl_seconds=app_settings.compute_idle_ttl_seconds,
         )
-    capability_service = capability_service or CapabilityService()
+    capability_service = capability_service or CapabilityService(
+        hq_installed=not app_settings.gpu_server_enabled
+    )
     database_engine = None
     database_sessions = None
     if repository is None:
@@ -128,13 +167,20 @@ def create_app(
     )
     if job_dispatcher is None:
         if redis_streams is not None and (
-            app_settings.redis_job_streams_enabled
-            or app_settings.redis_runner_backend_enabled
+            app_settings.redis_job_streams_enabled or app_settings.redis_runner_backend_enabled
         ):
             job_dispatcher = RedisJobDispatcher(redis_streams)
         else:
             job_dispatcher = InMemoryJobDispatcher()
-    if job_executor is None and app_settings.redis_runner_backend_enabled:
+    if job_executor is None and gpu_server_client is not None:
+        if gpu_server_leases is None:
+            raise RuntimeError("gpu-server jobs require the gpu-server compute adapter")
+        job_executor = GpuServerJobExecutor(
+            gpu_server_client,
+            gpu_server_leases,
+            poll_seconds=app_settings.gpu_server_poll_seconds,
+        )
+    elif job_executor is None and app_settings.redis_runner_backend_enabled:
         assert redis_streams is not None
         job_executor = RedisJobExecutor(
             redis_streams,
@@ -156,7 +202,7 @@ def create_app(
             compute_session_service,
             timeout_seconds=app_settings.runner_heartbeat_timeout_seconds,
         )
-        if app_settings.redis_runner_backend_enabled
+        if app_settings.redis_runner_backend_enabled and not app_settings.gpu_server_enabled
         else None
     )
 

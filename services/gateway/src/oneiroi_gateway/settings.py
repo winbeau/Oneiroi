@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +34,12 @@ class GatewaySettings(BaseSettings):
     service_assertion_issuer: str = "oneiroi-pi-bff"
     service_assertion_audience: str = "oneiroi-h100-gateway"
     service_assertion_clock_skew_seconds: float = Field(default=120, ge=0, le=300)
+    gpu_server_enabled: bool = False
+    gpu_server_base_url: str = "http://127.0.0.1:8300"
+    gpu_server_service_token: SecretStr | None = None
+    gpu_server_request_timeout_seconds: float = Field(default=7_200, gt=0, le=86_400)
+    gpu_server_poll_seconds: float = Field(default=0.5, gt=0, le=30)
+    gpu_server_mapping_ttl_seconds: int = Field(default=86_400, ge=300, le=604_800)
     ltx_git_commit: str = ""
     ltx_distilled_checkpoint_path: str = ""
     ltx_distilled_checkpoint_sha256: str = ""
@@ -45,6 +51,12 @@ class GatewaySettings(BaseSettings):
     ltx_upsampler_sha256: str = ""
     ltx_gemma_root: str = ""
     ltx_gemma_revision: str = ""
+
+    @model_validator(mode="after")
+    def gpu_server_requires_service_token(self) -> "GatewaySettings":
+        if self.gpu_server_enabled and self.gpu_server_service_token is None:
+            raise ValueError("ONEIROI_GATEWAY_GPU_SERVER_SERVICE_TOKEN is required")
+        return self
 
     @property
     def allowed_gpu_ids(self) -> frozenset[str] | None:

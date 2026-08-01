@@ -24,7 +24,11 @@ from oneiroi_gateway.services.artifact_service import ArtifactService
 from oneiroi_gateway.services.capabilities import CapabilityService
 from oneiroi_gateway.services.compute_sessions import ComputeSessionService
 from oneiroi_gateway.services.job_dispatcher import JobDispatcher
-from oneiroi_gateway.services.job_execution import JobExecutionResult, JobExecutor
+from oneiroi_gateway.services.job_execution import (
+    JobExecutionContext,
+    JobExecutionResult,
+    JobExecutor,
+)
 from oneiroi_gateway.services.job_scheduler import JobScheduler, SlotReservation
 
 
@@ -70,9 +74,7 @@ class JobService:
         self.capabilities.require_profile(session, payload.draft.profile)
         input_paths = await self._input_paths(owner_id, payload)
         now = utc_now()
-        profile_id = (
-            HQ_PROFILE_ID if payload.draft.profile is ProfileTier.HQ else FAST_PROFILE_ID
-        )
+        profile_id = HQ_PROFILE_ID if payload.draft.profile is ProfileTier.HQ else FAST_PROFILE_ID
         response = JobResponse(
             id=f"job-{uuid4().hex[:20]}",
             conversationId=payload.conversation_id,
@@ -107,11 +109,7 @@ class JobService:
                 )
                 if stored.response.gpu is None:
                     raise RuntimeError("JOB_HAS_NO_GPU_ASSIGNMENT")
-                slot = next(
-                    item
-                    for item in session.slots
-                    if item.gpu_id == stored.response.gpu.id
-                )
+                slot = next(item for item in session.slots if item.gpu_id == stored.response.gpu.id)
                 reservation = SlotReservation(
                     session_id=session.id,
                     slot_id=slot.id,
@@ -320,9 +318,11 @@ class JobService:
                     details,
                 ),
                 lambda: stored.response.id in self._cancel_requested,
+                JobExecutionContext(
+                    session_id=reservation.session_id,
+                    attempt=stored.response.attempt,
+                ),
             )
-            if stored.response.id in self._cancel_requested:
-                raise asyncio.CancelledError
             await self._succeed(stored, result)
         except asyncio.CancelledError:
             if self._shutting_down:
@@ -356,9 +356,17 @@ class JobService:
     ) -> None:
         stage = {
             "preparing": JobStatus.PREPARING,
+            "model-loading": JobStatus.LOADING_MODEL,
             "prompt_encoding": JobStatus.PREPARING,
+            "prompt-encoding": JobStatus.PREPARING,
+            "conditioning": JobStatus.PREPARING,
             "diffusion": JobStatus.GENERATING,
+            "stage-1": JobStatus.GENERATING,
+            "upsampling": JobStatus.GENERATING,
+            "stage-2": JobStatus.GENERATING,
+            "decoding": JobStatus.ENCODING,
             "encoding": JobStatus.ENCODING,
+            "uploading": JobStatus.ENCODING,
         }.get(phase, JobStatus.GENERATING)
         stored.response = stored.response.model_copy(
             update={

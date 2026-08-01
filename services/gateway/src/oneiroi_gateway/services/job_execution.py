@@ -17,6 +17,12 @@ CancelCheck = Callable[[], bool]
 
 
 @dataclass(frozen=True, slots=True)
+class JobExecutionContext:
+    session_id: str
+    attempt: int
+
+
+@dataclass(frozen=True, slots=True)
 class JobExecutionResult:
     output_path: Path
     manifest_path: Path
@@ -33,6 +39,7 @@ class JobExecutor(Protocol):
         input_paths: tuple[Path | None, Path | None],
         on_event: ExecutionEvent,
         is_cancelled: CancelCheck,
+        context: JobExecutionContext,
     ) -> JobExecutionResult: ...
 
 
@@ -49,8 +56,9 @@ class RedisJobExecutor:
         input_paths: tuple[Path | None, Path | None],
         on_event: ExecutionEvent,
         is_cancelled: CancelCheck,
+        context: JobExecutionContext,
     ) -> JobExecutionResult:
-        del draft, input_paths
+        del draft, input_paths, context
         cursor = "0-0"
         deadline = time.monotonic() + self.timeout_seconds
         cancel_path = job_directory / "control" / "cancel_requested"
@@ -104,7 +112,9 @@ class FakeJobExecutor:
         input_paths: tuple[Path | None, Path | None],
         on_event: ExecutionEvent,
         is_cancelled: CancelCheck,
+        context: JobExecutionContext,
     ) -> JobExecutionResult:
+        del context
         for phase, progress in (
             ("preparing", 25),
             ("prompt_encoding", 40),
