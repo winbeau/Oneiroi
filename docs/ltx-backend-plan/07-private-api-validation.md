@@ -1,6 +1,8 @@
 # 私网 GET、POST、PUT 集成验证计划
 
 > 本文件是 [LTX-2.3 动态 H100 主计划](../ltx-desktop-inspired-backend-plan.md) 的模块子计划，定义 P7/M8 的测试边界。目标是在不创建公网入口、不修改 Cloudflare Tunnel/DNS、不绑定公网接口的前提下验证真实 API。
+>
+> 实际执行结果见 [M8 私网 API 与真实 Fast I2V 验证记录](m8-private-api-validation.md)。
 
 ## 1. 验证目标
 

@@ -12,8 +12,8 @@
 | P3 | M4 HQ 能力 | 已完成 | `00dacc9`、`375fc95`、`fcae104`、`af38b3a` |
 | P4 | M5 真实任务 | 已完成 | `04473ee` |
 | P5 | M6 前端闭环 | 已完成 | `8cf26cf` |
-| P6 | M7 生产加固 | 已完成 | M7 本文件所在提交 |
-| P7 | M8 私网 API 验证 | 未开始 | — |
+| P6 | M7 生产加固 | 已完成 | `c3bbb6a` |
+| P7 | M8 私网 API 验证 | 已完成 | M8 本文件所在提交 |
 
 ## M1：Compute 契约、GPU inventory 与 heartbeat
 
@@ -208,5 +208,38 @@ H100 真实验证（2026-07-31）：
 - `pnpm check`、`git diff --check` 和敏感文件模式扫描：通过。
 
 真实 H100：本阶段只完成故障/容量自动化，不加载真实模型；真实 loopback Fast I2V 和 release 在 M8 执行。
+
+未解决阻塞：无。
+
+## M8：私网 GET/POST/PUT/SSE、真实 Fast I2V 与 release
+
+已验证实现与部署修复：
+
+- `scripts/test-private-api.sh` 在 production BFF 上覆盖 health、capabilities、Conversation POST/GET/重复 PUT、owner 隔离、422、GPU inventory、Compute session、Compute SSE、图片上传、Job SSE、授权 MP4/manifest 和 release；
+- Gateway/BFF 只监听 `127.0.0.1:18010/18000`，Redis/PostgreSQL 只监听 loopback；目标为禁用 Docker、无 systemd 的 Ubuntu 24.04 容器，验证未创建 Cloudflare、DNS、NAT 或公网入口；
+- production Gateway/BFF 的无身份请求均返回 401；BFF private Gateway client 禁止继承目标容器 proxy 环境；
+- 修复全局 `.gitignore` 误排除 Gateway `db/models` 源码的问题，目标机干净 checkout 可以执行 Alembic `0001_dynamic_backend (head)`；
+- public manifest 删除所有 path-bearing 字段，包括可能包含 LoRA 文件名的 `loraPathsAndScales`；
+- Runner 在 load 前后验证 live Redis lease 的 session/fencing token，迟到 bootstrap command 无法在 lease 释放后加载模型；
+- 详细记录见 `docs/ltx-backend-plan/m8-private-api-validation.md`。
+
+真实 H100 loopback 验证（2026-08-01）：
+
+- 8 张 H100 中 physical index 0、1、2、7 eligible；3–6 保持外部占用和不可分配，未被租约或终止；
+- 单卡 auto 最终选择 physical index 1、UUID `GPU-5cae32f8…`，1 Fast + 0 HQ；Compute snapshot/SSE ready，一卡 HQ 原因固定为 `HQ_REQUIRES_AT_LEAST_2_GPUS`；
+- cold Fast worker load 64.864 秒，adapter load count 1；真实 1280×704、121 帧、24 FPS I2V 生成耗时 19.521 秒，峰值显存 60313 MiB；
+- Job SSE 持久化 `job.queued → job.assigned → job.updated → job.succeeded`；授权 MP4 为 5.041667 秒、3217250 bytes，`ffprobe` 确认为 MP4 container；
+- release 返回 `released`，slot 为 `empty`，选中 GPU 显存从 0 MiB 回到 0 MiB，eligible 0/1/2/7 无 compute PID；
+- 临时 Gateway/BFF/Runner、M8 数据库行、Redis key、上传副本和生成媒体均已清理，API 测试端口已关闭。
+
+最终自动化检查：
+
+- `uv run ruff check .`：通过；
+- PostgreSQL + Redis 开关全部启用时 `uv run pytest`：69 项通过；
+- `pnpm check`：通过；
+- `pnpm --filter @oneiroi/web e2e`：9 项通过、1 项按条件跳过；
+- `bash -n scripts/test-private-api.sh`、`git diff --check`：通过。
+
+部署边界：目标 SSH 容器身份为 root，因此真实 M8 Runner 使用 development process mode；production Runner 拒绝 root 已在 M7 验证，正式容器必须使用专用非 root `USER`，不能关闭该保护。
 
 未解决阻塞：无。
