@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Capabilities */
+        get: operations["get_capabilities_v1_agent_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assets": {
         parameters: {
             query?: never;
@@ -384,6 +401,63 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentCapabilitiesResponse */
+        AgentCapabilitiesResponse: {
+            /** Available */
+            available: boolean;
+            /** Configured */
+            configured: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Functiontools
+             * @default false
+             */
+            functionTools: boolean;
+            /**
+             * Imagegeneration
+             * @default false
+             */
+            imageGeneration: boolean;
+            /**
+             * Imageinput
+             * @default false
+             */
+            imageInput: boolean;
+            /** Model */
+            model?: string | null;
+            /** Provider */
+            provider?: "openai-responses" | null;
+            /** Reasoncode */
+            reasonCode?: string | null;
+            /**
+             * Streaming
+             * @default false
+             */
+            streaming: boolean;
+            /**
+             * Text
+             * @default false
+             */
+            text: boolean;
+            /** Transports */
+            transports?: ("sse" | "websocket")[];
+            /**
+             * Usage
+             * @default false
+             */
+            usage: boolean;
+            /**
+             * Websocketdeclared
+             * @default false
+             */
+            websocketDeclared: boolean;
+            /**
+             * Websocketverified
+             * @default false
+             */
+            websocketVerified: boolean;
+        };
         /** AssetResponse */
         AssetResponse: {
             /**
@@ -879,6 +953,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceHealth"];
+                };
+            };
+        };
+    };
+    get_capabilities_v1_agent_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCapabilitiesResponse"];
                 };
             };
         };

@@ -1,6 +1,115 @@
 {
   "components": {
     "schemas": {
+      "AgentCapabilitiesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "functionTools": {
+            "default": false,
+            "title": "Functiontools",
+            "type": "boolean"
+          },
+          "imageGeneration": {
+            "default": false,
+            "title": "Imagegeneration",
+            "type": "boolean"
+          },
+          "imageInput": {
+            "default": false,
+            "title": "Imageinput",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "const": "openai-responses",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reasonCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoncode"
+          },
+          "streaming": {
+            "default": false,
+            "title": "Streaming",
+            "type": "boolean"
+          },
+          "text": {
+            "default": false,
+            "title": "Text",
+            "type": "boolean"
+          },
+          "transports": {
+            "items": {
+              "enum": [
+                "sse",
+                "websocket"
+              ],
+              "type": "string"
+            },
+            "title": "Transports",
+            "type": "array"
+          },
+          "usage": {
+            "default": false,
+            "title": "Usage",
+            "type": "boolean"
+          },
+          "websocketDeclared": {
+            "default": false,
+            "title": "Websocketdeclared",
+            "type": "boolean"
+          },
+          "websocketVerified": {
+            "default": false,
+            "title": "Websocketverified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "configured",
+          "available"
+        ],
+        "title": "AgentCapabilitiesResponse",
+        "type": "object"
+      },
       "AssetResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1204,6 +1313,27 @@
         "summary": "Healthz",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/v1/agent/capabilities": {
+      "get": {
+        "operationId": "get_capabilities_v1_agent_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCapabilitiesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Capabilities",
+        "tags": [
+          "agent"
         ]
       }
     },

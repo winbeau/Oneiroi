@@ -1,5 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +42,30 @@ class GatewaySettings(BaseSettings):
     gpu_server_request_timeout_seconds: float = Field(default=7_200, gt=0, le=86_400)
     gpu_server_poll_seconds: float = Field(default=0.5, gt=0, le=30)
     gpu_server_mapping_ttl_seconds: int = Field(default=86_400, ge=300, le=604_800)
+    agent_enabled: bool = False
+    agent_provider: Literal["openai-responses"] = "openai-responses"
+    agent_api_key: SecretStr | None = None
+    agent_base_url: str = ""
+    agent_model: str = "gpt-5.6-sol"
+    agent_review_model: str = ""
+    agent_reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] = "xhigh"
+    agent_store: Literal[False] = False
+    agent_transport: Literal["sse", "websocket"] = "sse"
+    agent_websocket_enabled: bool = False
+    agent_provider_websocket_declared: bool = True
+    agent_connect_timeout_seconds: float = Field(default=10, gt=0, le=120)
+    agent_stream_timeout_seconds: float = Field(default=180, gt=0, le=1_800)
+    agent_max_run_seconds: float = Field(default=300, gt=0, le=3_600)
+    agent_max_output_tokens: int = Field(default=4_000, ge=1, le=100_000)
+    agent_max_input_images: int = Field(default=4, ge=0, le=8)
+    agent_max_image_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
+    agent_max_retries: int = Field(default=2, ge=0, le=5)
+    agent_max_retry_delay_seconds: float = Field(default=4, ge=0, le=60)
+    agent_capability_file: Path | None = None
+    agent_image_input_enabled: bool = False
+    agent_image_enabled: bool = False
+    agent_image_model: str = ""
+    agent_image_mode: Literal["responses-tool"] = "responses-tool"
     ltx_git_commit: str = ""
     ltx_distilled_checkpoint_path: str = ""
     ltx_distilled_checkpoint_sha256: str = ""
@@ -53,9 +79,42 @@ class GatewaySettings(BaseSettings):
     ltx_gemma_revision: str = ""
 
     @model_validator(mode="after")
-    def gpu_server_requires_service_token(self) -> "GatewaySettings":
+    def validate_enabled_integrations(self) -> "GatewaySettings":
         if self.gpu_server_enabled and self.gpu_server_service_token is None:
             raise ValueError("ONEIROI_GATEWAY_GPU_SERVER_SERVICE_TOKEN is required")
+        if self.agent_base_url:
+            parsed = urlsplit(self.agent_base_url)
+            try:
+                _ = parsed.port
+            except ValueError as exc:
+                raise ValueError("ONEIROI_GATEWAY_AGENT_BASE_URL must use a valid port") from exc
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError(
+                    "ONEIROI_GATEWAY_AGENT_BASE_URL must be a credential-free HTTPS URL"
+                )
+        if self.agent_enabled:
+            if self.agent_api_key is None or not self.agent_api_key.get_secret_value().strip():
+                raise ValueError("ONEIROI_GATEWAY_AGENT_API_KEY is required")
+            if not self.agent_base_url:
+                raise ValueError("ONEIROI_GATEWAY_AGENT_BASE_URL is required")
+            if not self.agent_model.strip() or any(char in self.agent_model for char in "\r\n"):
+                raise ValueError("ONEIROI_GATEWAY_AGENT_MODEL is required")
+        if self.agent_transport == "websocket" and not self.agent_websocket_enabled:
+            raise ValueError(
+                "ONEIROI_GATEWAY_AGENT_TRANSPORT=websocket requires the explicit "
+                "WebSocket canary flag"
+            )
+        if (self.agent_image_input_enabled or self.agent_image_enabled) and not self.agent_enabled:
+            raise ValueError("Agent image flags require ONEIROI_GATEWAY_AGENT_ENABLED=true")
+        if self.agent_stream_timeout_seconds > self.agent_max_run_seconds:
+            raise ValueError("Agent stream timeout cannot exceed the maximum run timeout")
         return self
 
     @property

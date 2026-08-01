@@ -20,6 +20,7 @@ from oneiroi_gateway.redis.leases import RedisLeaseStore
 from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
 from oneiroi_gateway.repositories.sql_studio import SqlStudioRepository
 from oneiroi_gateway.repositories.studio import InMemoryStudioRepository, StudioRepository
+from oneiroi_gateway.routes.agent import create_agent_router
 from oneiroi_gateway.routes.assets import create_asset_router
 from oneiroi_gateway.routes.compute import create_compute_router
 from oneiroi_gateway.routes.conversations import create_conversation_router
@@ -30,6 +31,7 @@ from oneiroi_gateway.service_auth import (
     ServiceAuthConfigurationError,
     ServiceAuthenticationError,
 )
+from oneiroi_gateway.services.agent_capabilities import AgentCapabilityService
 from oneiroi_gateway.services.artifact_service import ArtifactService
 from oneiroi_gateway.services.capabilities import CapabilityService
 from oneiroi_gateway.services.compute_sessions import (
@@ -63,6 +65,7 @@ def create_app(
     inventory_service: GpuInventoryService | None = None,
     compute_session_service: ComputeSessionService | None = None,
     capability_service: CapabilityService | None = None,
+    agent_capability_service: AgentCapabilityService | None = None,
     repository: StudioRepository | None = None,
     job_dispatcher: JobDispatcher | None = None,
     job_executor: JobExecutor | None = None,
@@ -149,6 +152,7 @@ def create_app(
     capability_service = capability_service or CapabilityService(
         hq_installed=not app_settings.gpu_server_enabled
     )
+    agent_capability_service = agent_capability_service or AgentCapabilityService(app_settings)
     database_engine = None
     database_sessions = None
     if repository is None:
@@ -281,6 +285,8 @@ def create_app(
     app.state.redis_streams = redis_streams
     app.state.repository = repository
     app.state.job_service = job_service
+    app.state.agent_capability_service = agent_capability_service
+    app.include_router(create_agent_router(agent_capability_service))
     app.include_router(
         create_compute_router(inventory_service, compute_session_service, capability_service)
     )

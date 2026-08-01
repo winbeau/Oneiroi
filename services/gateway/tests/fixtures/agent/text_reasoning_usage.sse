@@ -1,0 +1,28 @@
+id: evt-1
+data: {"type":"response.created","response":{"id":"resp-text"}}
+
+id: evt-2
+data: {"type":"response.reasoning_summary_text.delta","delta":"Inspecting the request."}
+
+id: evt-3
+data: {"type":"response.reasoning_summary_text.done","text":"Prepared a safe summary."}
+
+id: evt-4
+data: {"type":"response.output_text.delta","delta":"Hello "}
+
+id: evt-4
+data: {"type":"response.output_text.delta","delta":"duplicate"}
+
+id: evt-5
+data: {"type":"response.unknown.vendor_event","payload":"ignored"}
+
+id: evt-6
+data: {"type":"response.output_text.delta","delta":"world"}
+
+id: evt-7
+data: {"type":"response.output_text.done","text":"Hello world"}
+
+id: evt-8
+data: {"type":"response.completed","response":{"id":"resp-text","usage":{"input_tokens":11,"output_tokens":7,"total_tokens":18}}}
+
+data: [DONE]
