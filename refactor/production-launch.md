@@ -1,30 +1,41 @@
 # Oneiroi React 优先上线与三仓联调计划
 
-> 探查时间：2026-08-01。远端只读探查目标：`pi5`、`h100-server`。
+> 首次探查与生产激活时间：2026-08-01。目标：`pi5`、`h100-server`。
 
-## 0. 2026-08-01 执行记录
+## 0. 2026-08-01 生产发布记录
 
-### 已完成：身份与生产 origin 实现
+### 发布结论
 
-- BFF 新增 Cloudflare Access JWT 的 RS256/JWKS、issuer、audience、expiry 验证；生产环境不再信任浏览器 `oneiroi_user` cookie 或 `X-Oneiroi-User`。
-- `(issuer, subject)` 通过稳定 SHA-256 adapter 映射为内部 owner；conversation、asset、job 和 compute session 继续使用既有 owner 过滤。
-- Pi BFF 使用本机 RSA 私钥签发 60 秒服务断言；H100 BFF 与 Gateway 使用公钥验证，并校验断言 subject 与内部 owner header 一致。
-- mutation 增加同源 Origin CSRF 检查；下载转发支持 Range/If-Range/ETag/Content-Range 并采用流式响应。
-- Vite 已删除 `ONEIROI_API_PROXY_USER` 注入；新增 loopback Node 静态 origin、固定 release SHA 的 user unit 模板和显式 FFmpeg CI prerequisite 检查。
-- 安全实现 release commit：`6da4f976c9143d4f880b52f055742e6ec23ce70f`（`main` 已推送）。
-- 本地证据：`pnpm check`、`pnpm check:api`、`uv run ruff check .`、`uv run pytest`（67 passed, 5 skipped）、静态 origin `/`、`/create?from=smoke`、`/healthz` 均通过。
+- 生产 runtime release SHA：`fa7c28cc98edf423e2be8762ad13b55f606389eb`；Pi 与 H100 checkout 均固定并运行该 SHA，工作区干净。
+- 发布后 `origin/main` 另有 `d88ae28912f08d78fa1ca78d27f132abd9d1201f` gpu-server canary adapter 提交；本次没有自动拉取或激活该后续功能，生产仍按上述 runtime SHA 冻结。
+- Cloudflare Access 已保护 `video.icthub.top/*`，issuer 为 `https://restless-cherry-c802.cloudflareaccess.com`，application audience 为 `a9c5fe880b298db5a308ab2694ae0c6d2f1c165164075c91eb32191023be09c9`。
+- 未登录请求 `/` 与 `/create?from=access-check` 均返回 302 到 Cloudflare Access；深链接 path/query 保留，没有 Bypass 证据。
+- Pi 已运行 `oneiroi-bff.service` 和 immutable `oneiroi-web.service`：BFF 监听 `127.0.0.1:8000`，React origin 监听 `127.0.0.1:4173`，Tunnel 保持指向 loopback 4173。
+- H100 Gateway/BFF 已由 Supervisor 管理：Gateway `127.0.0.1:18010`，BFF `10.30.176.95:18000`；两者 health 200。
+- Pi 持有 3072-bit RSA 服务私钥，H100 只持有公钥；服务断言有效期为 300 秒，并仅容忍 120 秒有界时钟偏差。
+- 发布验收发现畸形 PNG 触发 500；`fa7c28c` 已将 Pillow `SyntaxError` 映射为 422 `INVALID_IMAGE` 并增加回归测试。
 
-### 远端激活门
+### 验收证据
 
-- 当前外部未登录访问 `https://video.icthub.top/` 和 `/create` 仍为 HTTP 200，说明 Cloudflare Access 应用尚未生效；在完成 Authentik OIDC/group policy 和获得该 Access application audience 前，不激活新生产链路。
-- 已确认可复用的 Cloudflare team issuer 为 `https://restless-cherry-c802.cloudflareaccess.com`；`video.icthub.top` 必须使用自己的 Access application audience，不能猜测或复用错误 audience。
-- 激活前基线：Pi `18935366644f25cd88224798208793ef68bbb317`；H100 `69a53842db90bb43d6785611d385dbd66e5fe028`；本地 `main` 基线 `800bd53`。
+- 本地质量门：`uv run ruff check .`、`uv run pytest`（68 passed, 5 skipped）、`pnpm check`、`pnpm check:api`、部署脚本 shell syntax 和 static origin Node syntax 全部通过。
+- Pi production origin：`/`、`/create?from=release`、`/healthz` 为 200；无 Access JWT、伪造 `oneiroi_user` cookie 或 `X-Oneiroi-User` 的 API 请求为 401。
+- H100 私有边界：无服务断言访问 BFF/Gateway 为 401；有效 Pi 服务断言通过 H100 BFF 到 Gateway 为 200。
+- 两个稳定映射测试 owner 的实机隔离：conversation 自读 200、交叉读取双向 404、列表互不可见；测试记录已精确清理。
+- 资产实机验收：有效 PNG upload 201、10-byte Range 返回 206 与正确 `Content-Range`、另一 owner 读取 404、删除 204；畸形 PNG 返回 422 `INVALID_IMAGE`。
+- `oneiroi-studio-loopback.service` 已停止；原 LAN `oneiroi-studio.service` 暂留给可能的 `video-in` 内网依赖，不承载 `video.icthub.top` 公网流量。
 
-### 回滚原则
+### 尚未声称完成的门
 
-- Access 策略保持启用；不得通过恢复固定 `lan-preview` 身份来回滚。若身份链路异常，先关闭 Oneiroi public ingress，再把 Pi/H100 checkout 切回上述基线 SHA 并恢复原进程命令。
-- Pi 回滚目标：原 `oneiroi-studio.service`、`oneiroi-studio-loopback.service` 和 `cloudflared-video.service`；新 user units 仅在健康检查通过后替换旧服务。
-- H100 回滚目标：Gateway `127.0.0.1:18010` 和 BFF `10.30.176.95:18000` 的原 supervisor/前台启动方式；不删除 storage、temp、模型或数据库文件。
+- 尚无两个真实 Authentik 邀请用户的浏览器会话，因此真实用户登录后的 conversation/asset/job 隔离、group 拒绝与完整 SSE 流仍需人工双账号验收；当前证据覆盖 Access challenge、JWT/服务身份单测和双 owner 实机后端隔离，不伪造真实用户通过。
+- Pi 本次只完成受控 service restart 与 `linger=yes`/enabled unit 基线，尚未执行整机 reboot；reboot recovery 仍是发布后人工维护窗验收项。
+- H100 当前没有 Oneiroi Runner/LTX inference 进程；生成任务必须真实失败或显示不可用，不能把 capability 声明当作生成链路成功。
+
+### 回滚方法
+
+- Access 策略始终保持启用；不得恢复固定 `lan-preview` 身份。若身份链路异常，先停止 `cloudflared-video.service`，再处理 runtime 回滚。
+- 最近安全版本回滚点为 `5e68ebf6c5ca170df8be7c72b0866cfc37a3c675`。Pi 回滚：在 `/home/winbeau/oneiroi-studio` checkout 该 SHA、运行 frozen dependency sync、同步 `/home/winbeau/.config/oneiroi/web.env` 的 release SHA，然后重启 `oneiroi-bff.service` 与 `oneiroi-web.service`。
+- H100 回滚：在 `/root/wenbiao_zhao/Oneiroi` checkout `5e68ebf6c5ca170df8be7c72b0866cfc37a3c675`、运行 `uv sync --all-packages --frozen`，再由 Supervisor 重启 `oneiroi-gateway` 与 `oneiroi-bff`。
+- 仅在 public ingress 已关闭时，才可回到探查基线 Pi `18935366644f25cd88224798208793ef68bbb317` / H100 `69a53842db90bb43d6785611d385dbd66e5fe028`；不得删除数据库、storage、模型、temp 或密钥文件。
 
 ## 1. 第一目标
 
@@ -46,63 +57,48 @@
 
 ### Pi 5
 
-- 主机：`selabpi5`，Ubuntu 24.04.4，aarch64，15 GiB RAM，根盘剩余约 79 GiB。
-- Cisco VPN：`ciscovpn0=10.255.101.103`，已有 `10.30.176.0/24` 路由。
-- Oneiroi checkout：`/home/winbeau/oneiroi-studio`。
-- 当前运行 commit：`1893536`；GitHub `main` 当前包含后续文档 commit，但运行时代码基线一致。
-- `oneiroi-studio.service`：Vite preview，监听 `192.168.3.250:4173`。
-- `oneiroi-studio-loopback.service`：第二个 Vite preview，监听 `127.0.0.1:4173`。
-- `cloudflared-video.service`：`video.icthub.top -> 127.0.0.1:4173`。
-- user linger 已开启，重启后 user services 可自动启动。
-- `/healthz`、`/v1/conversations`、`/v1/compute/gpus` 从 Pi proxy 实测 HTTP 200。
-- 当前 proxy target：`http://10.30.176.95:18000`。
-- 当前 proxy 固定注入 `oneiroi_user=lan-preview`，所有访问者共享同一产品身份。
-- 网页可被外部 fetch 到 Oneiroi HTML；不能把“页面可打开”等同于 Access/用户隔离完成。
+- checkout：`/home/winbeau/oneiroi-studio`；runtime SHA：`fa7c28cc98edf423e2be8762ad13b55f606389eb`；工作区干净。
+- `oneiroi-bff.service`：active/running，监听 `127.0.0.1:8000`，验证 Cloudflare Access JWT 并签发 Pi→H100 服务断言。
+- `oneiroi-web.service`：active/running，immutable `apps/web/dist`，监听 `127.0.0.1:4173`，`/healthz` 与深链接 fallback 正常。
+- `cloudflared-video.service`：active/running，`video.icthub.top -> 127.0.0.1:4173`；未登录访问由 Access 在 origin 前挑战。
+- `oneiroi-studio-loopback.service`：inactive/dead；4174 canary 已停止。
+- `oneiroi-studio.service`：仍监听 `192.168.3.250:4173`，只为尚未确认的 `video-in` 内网兼容保留，不是公网 origin。
+- user linger 已开启，`oneiroi-bff.service` 与 `oneiroi-web.service` 均 enabled；整机 reboot 恢复尚待维护窗实测。
 
 ### H100 server
 
-- Ubuntu 24.04 容器环境，PID 1 不是 systemd；部署必须支持前台/平台 supervisor，不能依赖 systemd。
-- 当前登录身份为 root；生产目标仍应使用非 root worker，但不能在本任务中切换身份。
-- 地址：`10.30.176.95`，Pi 通过 Cisco VPN 可达。
-- 8 × NVIDIA H100 80GB，稳定 UUID 已确认。
-- 当前 GPU 0/1/2/7 空闲；GPU 3/4/5/6 使用约 13.5 GiB，Oneiroi API 将其标记为 `VRAM_ABOVE_IDLE_THRESHOLD`。
-- Pi API snapshot：8 卡、4 卡 eligible；Fast/HQ capability 都声明 available。
-- Oneiroi Gateway：`127.0.0.1:18010`，health 200，私有 API无身份时 401。
-- Oneiroi BFF：`10.30.176.95:18000`，health 200。
-- H100 checkout：`/root/wenbiao_zhao/Oneiroi`，运行 commit `69a5384`，落后 Pi runtime 修复 commit。
-- Redis `127.0.0.1:6379`、PostgreSQL `127.0.0.1:5432` 正常运行。
-- 当前未发现 Oneiroi Runner/worker_process/LTX inference 进程。
-- 文件系统显示 100%，但仍约 9.5 GiB 可用；权重已齐、单视频几 MiB，足够受控 Fast MVP，需严格 temp cleanup/admission。
-- `/data/oneiroi` 约 128 GiB，LTX Fast/HQ/Gemma 模型已存在。
-- LTX code commit：`9377758131b1ffde4b7f766804590a6617bf2ab9`。
-- LTX model revision：`4229404625088d21c4f112eb640fb04a0900ee25`。
-- Gemma revision：`68f7ee4fbd59087436ada77ed2d62f373fdd4482`。
+- checkout：`/root/wenbiao_zhao/Oneiroi`；runtime SHA：`fa7c28cc98edf423e2be8762ad13b55f606389eb`；工作区干净。
+- `oneiroi-gateway`：Supervisor RUNNING，`127.0.0.1:18010`，health 200，无服务断言的私有 API 为 401。
+- `oneiroi-bff`：Supervisor RUNNING，`10.30.176.95:18000`，health 200，伪造 cookie/header 为 401。
+- Gateway/BFF 的受限环境存放在 `/root/wenbiao_zhao/oneiroi-config/*.json`，不进入 Git；服务公钥文件 fingerprint 已在 Pi/H100 两端核对一致。
+- Redis/PostgreSQL 与既有持久化数据保持不变；发布未删除 storage、temp、模型或数据库数据。
+- 当前仍未发现 Oneiroi Runner/worker_process/LTX inference 进程；真实生成由后续 gpu-server 接入阶段完成。
 
 ## 3. 当前最高风险
 
-### P0：固定身份
+### 已关闭：固定身份与公开绕过
 
-`ONEIROI_API_PROXY_USER=lan-preview` 会让所有登录用户看到/写入同一 owner 的 conversation、asset 和 job。邀请注册正式开放前必须删除。
+Vite 不再注入 `ONEIROI_API_PROXY_USER`，生产 BFF 不信任浏览器 cookie/header；`video.icthub.top/*` 已由 Cloudflare Access 保护，未登录请求不再直达 React origin。
 
-### P0：video Access 未完成验收
+### 待人工：真实 Authentik 双账号与 group policy
 
-`video.icthub.top/*` 必须与 `comfy.icthub.top/*` 同级使用 Cloudflare Access + Authentik OIDC。仅页面可访问不算完成；必须验证未登录 challenge、group 拒绝和深链接回跳。
+已验证 Access challenge/audience/深链接回跳、JWT 单测和双 owner 后端隔离；仍需两个真实邀请账号验证 Authentik group 拒绝、登录后 owner 稳定性以及 conversation/asset/job/SSE 的浏览器端互不可见。
 
-### 存储运行约束（不阻塞 Fast MVP）
+### 待维护窗：Pi reboot recovery
 
-H100 当前约 9.5 GiB 可用，但权重、Gemma、upscaler 已全部下载，单个 MP4 只有几 MiB，足够先跑 Fast E2E。禁止重新下载/复制权重；attempt temp 在 artifact 上传后立即清理，并设置低水位 admission。同学后续释放 300 GiB 只增加长期余量。
+user linger、enabled unit、受控 restart 和 health 均通过，但整机 reboot 尚未执行。reboot 后必须确认 BFF、Web、Tunnel 自动恢复，且公网仍先经过 Access。
 
-### P1：Vite preview 双实例
+### 存储运行约束
 
-当前有 LAN/loopback 两个 preview，约 200 MiB 常驻内存，构建与运行耦合。上线初期可保留 loopback preview 作为临时 beta，但应尽快改 immutable dist + 静态 origin + 独立 BFF。
+H100 探查时文件系统显示 100% 但仍约 9.5 GiB 可用；禁止重新下载/复制权重，attempt temp 必须及时清理并设置低水位 admission。
 
-### P1：Pi/H100 commit 漂移
+### P1：LAN preview 兼容实例
 
-Pi `1893536`，H100 `69a5384`。任何联调前先定义同一 release SHA/contract version；不能分别 `git pull` 到不一致状态。
+loopback Vite preview 已移除，但 `oneiroi-studio.service` 仍为潜在 `video-in` 内网依赖保留。确认无依赖后再停用，不能盲删 unit 或覆盖内网工作流。
 
 ### P1：Runner 不在线
 
-capability available 只证明资产/配置判断通过，不证明当前存在可执行 worker。真实 E2E 必须等待 gpu-server Runner。
+capability available 只证明资产/配置判断通过，不证明当前存在可执行 worker。真实 LTX Fast E2E 必须等待 gpu-server Runner。
 
 ## 4. 前端视觉基线
 
