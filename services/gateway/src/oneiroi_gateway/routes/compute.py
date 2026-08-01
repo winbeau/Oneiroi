@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from oneiroi_common.compute import (
+    ComputeCapabilitiesResponse,
     ComputeSessionCreate,
     ComputeSessionRelease,
     ComputeSessionSnapshot,
@@ -27,11 +28,15 @@ def create_compute_router(
     async def get_gpus() -> GpuInventoryResponse:
         return await inventory.snapshot()
 
-    @router.get("/capabilities")
+    @router.get(
+        "/capabilities",
+        response_model=ComputeCapabilitiesResponse,
+        response_model_by_alias=True,
+    )
     async def get_capabilities(
         session_id: Annotated[str | None, Query(alias="sessionId")] = None,
         user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
-    ):
+    ) -> ComputeCapabilitiesResponse:
         session = None
         if session_id:
             try:

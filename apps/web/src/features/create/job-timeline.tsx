@@ -1,85 +1,83 @@
 import { Check, X } from "lucide-react";
-import { motion } from "motion/react";
 
 import type { JobStage } from "@/features/studio/types";
 import { cn } from "@/lib/utils";
 
-const timelineStages: Array<{ stage: JobStage; label: string }> = [
-  { stage: "uploaded", label: "上传" },
-  { stage: "queued", label: "排队" },
-  { stage: "assigned", label: "分配" },
-  { stage: "preparing", label: "准备" },
-  { stage: "generating", label: "生成" },
-  { stage: "encoding", label: "编码" },
-  { stage: "succeeded", label: "完成" },
-];
+const stages = [
+  { id: "assigned", label: "分配" },
+  { id: "loading_model", label: "模型" },
+  { id: "prompt_encoding", label: "Prompt" },
+  { id: "diffusion", label: "扩散" },
+  { id: "stage_2", label: "增强" },
+  { id: "encoding", label: "编码" },
+  { id: "succeeded", label: "完成" },
+] as const;
 
-const order: JobStage[] = [
-  "draft",
-  "uploaded",
-  "queued",
-  "assigned",
-  "preparing",
-  "generating",
-  "encoding",
-  "succeeded",
-];
+const stageIndex: Record<JobStage, number> = {
+  draft: 0,
+  uploaded: 0,
+  queued: 0,
+  assigned: 0,
+  loading_model: 1,
+  preparing: 2,
+  generating: 3,
+  encoding: 5,
+  cancel_requested: 3,
+  succeeded: 6,
+  failed: 3,
+  cancelled: 3,
+};
 
-export function JobTimeline({ stage }: { stage: JobStage }) {
+export function JobTimeline({
+  stage,
+  phase,
+  currentStep,
+  totalSteps,
+}: {
+  stage: JobStage;
+  phase?: string | null;
+  currentStep?: number | null;
+  totalSteps?: number | null;
+}) {
   const terminalFailure = stage === "failed" || stage === "cancelled";
-  const currentIndex = terminalFailure
-    ? Math.max(0, timelineStages.findIndex((item) => item.stage === "generating"))
-    : Math.max(0, order.indexOf(stage) - 1);
+  const currentIndex = phase === "stage_2" ? 4 : stageIndex[stage];
 
   return (
-    <div className="hide-scrollbar overflow-x-auto" aria-label="任务阶段">
+    <div aria-label="任务阶段" className="hide-scrollbar overflow-x-auto">
       <ol className="flex min-w-[560px] items-start px-0.5">
-        {timelineStages.map((item, index) => {
+        {stages.map((item, index) => {
           const complete = !terminalFailure && index < currentIndex;
           const current = index === currentIndex;
           return (
-            <li className="relative flex flex-1 flex-col items-center" key={item.stage}>
+            <li className="relative flex flex-1 flex-col items-center" key={item.id}>
               {index > 0 && (
                 <span className="absolute right-1/2 top-[7px] h-px w-full bg-[var(--color-border-strong)]">
                   {(complete || current) && !terminalFailure && (
-                    <motion.span
-                      animate={{ scaleX: 1 }}
-                      className="absolute inset-0 origin-left bg-[var(--color-accent)]"
-                      initial={{ scaleX: 0 }}
-                      transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
-                    />
+                    <span className="absolute inset-0 bg-[var(--color-accent)]" />
                   )}
                 </span>
               )}
               <span
                 className={cn(
-                  "relative z-10 grid size-[15px] place-items-center rounded-full border transition-colors duration-300",
+                  "relative z-10 grid size-[15px] place-items-center rounded-full border",
                   complete && "border-[var(--color-accent)] bg-[var(--color-accent)] text-white",
-                  current &&
-                    !terminalFailure &&
-                    "border-[var(--color-accent)] bg-white text-[var(--color-accent)] shadow-[0_0_0_4px_var(--color-accent-soft)]",
-                  current &&
-                    terminalFailure &&
-                    "border-[var(--color-danger)] bg-white text-[var(--color-danger)] shadow-[0_0_0_4px_rgba(184,74,74,0.10)]",
+                  current && !terminalFailure && "border-[var(--color-accent)] bg-white",
+                  current && terminalFailure && "border-[var(--color-danger)] bg-white",
                   !complete && !current && "border-[var(--color-border-strong)] bg-white",
                 )}
               >
-                {complete && <Check aria-hidden="true" className="size-2.5" strokeWidth={2.5} />}
-                {current && terminalFailure && <X aria-hidden="true" className="size-2.5" strokeWidth={2.5} />}
+                {complete && <Check className="size-2.5" />}
+                {current && terminalFailure && <X className="size-2.5" />}
                 {current && !terminalFailure && (
                   <span className="soft-pulse size-1.5 rounded-full bg-[var(--color-accent)]" />
                 )}
               </span>
-              <span
-                className={cn(
-                  "mt-2 text-[10px] font-medium",
-                  complete || current
-                    ? "text-[var(--color-text)]"
-                    : "text-[var(--color-text-faint)]",
-                )}
-              >
-                {item.label}
-              </span>
+              <span className="mt-2 text-[10px] font-medium">{item.label}</span>
+              {item.id === "diffusion" && currentStep != null && totalSteps != null && (
+                <span className="mt-0.5 font-mono text-[9px] text-[var(--color-text-faint)]">
+                  {currentStep}/{totalSteps}
+                </span>
+              )}
             </li>
           );
         })}

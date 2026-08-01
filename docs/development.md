@@ -35,7 +35,11 @@ pnpm dev
 - BFF health: `http://localhost:8000/healthz`
 - Gateway health: `http://localhost:8010/healthz`
 
-WebUI 会优先调用同源 BFF；BFF 未启动时自动退回浏览器内的演示任务流，仍可验收灵感模板、首尾帧、参数、任务阶段和资产复用。Prompt 包含 `[fail]` 时可测试可恢复失败卡片。
+WebUI 默认只调用同源 BFF。BFF/Gateway 不可用时，生产模式会明确显示错误并保持“生成”禁用，不会在浏览器内伪造成功任务或资产。只有显式设置 `VITE_DEMO_MODE=true` 时才启用带 `Demo mode` 标识的本地演示 adapter：
+
+```bash
+VITE_DEMO_MODE=true pnpm dev
+```
 
 工作区内网调试：
 
@@ -57,7 +61,7 @@ systemctl --user status oneiroi-studio.service
 journalctl --user -u oneiroi-studio.service -f
 ```
 
-Runner 骨架可用以下方式启动；它当前只维护进程生命周期，尚未连接真实 LTX 管线：
+Runner 可按 GPU UUID 启动 Supervisor；显式加载 slot 后会启动隔离的 Model Worker，并按 PipelineSpec 选择真实 Fast/HQ LTX adapter：
 
 ```bash
 ONEIROI_RUNNER_NAME=runner-0 \
@@ -70,16 +74,19 @@ uv run oneiroi-runner
 ## 4. 检查
 
 ```bash
+pnpm generate:api
+pnpm check:api
 pnpm check
 uv run ruff check .
 uv run pytest
 pnpm --filter @oneiroi/web e2e
 ```
 
-## 5. 后续实现顺序
+`pnpm generate:api` 从 Gateway Pydantic/OpenAPI 导出 `apps/web/openapi/gateway.json`，再生成 `apps/web/src/generated/gateway.ts`。API DTO 变更后必须重新生成并提交；CI 使用 `pnpm check:api` 检查漂移。
 
-1. Gateway 数据库模型、Redis 队列和任务状态迁移；
-2. 单个 Fast Runner 的真实 I2V 适配器与心跳；
-3. BFF 显式上传、SSE 和授权下载路由；
-4. WebUI 接入真实 API；
-5. 复制四个固定 GPU Runner，并补取消、超时、OOM 和审计。
+## 5. 当前后续顺序
+
+1. 完成生产配置、鉴权边界、超时、OOM、审计与运行手册；
+2. 按私网验收清单启动 Gateway、BFF 和 Runner；
+3. 验证 GET、POST、PUT、SSE、真实 I2V、授权下载与 GPU release；
+4. 确认所有服务只监听 `127.0.0.1`，不新增 Cloudflare、DNS 或路由入口。

@@ -10,8 +10,8 @@
 | P1 | M2 Fast 生命周期 | 已完成 | `b3956fd`、`4e5299f`、`201c1bc`、`e13bc0d` |
 | P2 | M3 动态调度 | 已完成 | `3304dba` |
 | P3 | M4 HQ 能力 | 已完成 | `00dacc9`、`375fc95`、`fcae104`、`af38b3a` |
-| P4 | M5 真实任务 | 已完成 | M5 本文件所在提交 |
-| P5 | M6 前端闭环 | 未开始 | — |
+| P4 | M5 真实任务 | 已完成 | `04473ee` |
+| P5 | M6 前端闭环 | 已完成 | M6 本文件所在提交 |
 | P6 | M7 生产加固 | 未开始 | — |
 | P7 | M8 私网 API 验证 | 未开始 | — |
 
@@ -156,5 +156,29 @@ H100 真实验证（2026-07-31）：
 - `git diff --check`：通过。
 
 真实资产基线：M2 Fast 和 M4 HQ 已输出真实 LTX MP4；M5 的真实 Gateway → Model Worker HTTP 链在最终 M8 私网验证中执行，不以测试 fake 结果替代该最终验收。
+
+未解决阻塞：无。
+
+## M6：Compute UI、真实前端状态与 OpenAPI 契约
+
+已验证实现：
+
+- WebUI 服务端状态迁移到 TanStack Query：Conversation、Job、Asset、GPU inventory、capability 和 Compute session 均以 Gateway/BFF snapshot 为准；Zustand 只保留 Composer 草稿、active conversation/session ID 与 UI 展开状态；
+- 新增 ComputeControl、GPU selector、session/slot 面板和 release dialog，覆盖自动/手动选卡、默认 4 卡、partial allocation、balanced Fast/HQ 预览、逐 slot 加载状态和释放策略；
+- Composer 从 `/v1/compute/capabilities` 渲染参数矩阵；无 ready session 时禁用生成，一卡 session 的 HQ 在前端显示后端原因并禁用，不会静默降级为 Fast；
+- 上传、Conversation 创建、I2V 提交、取消、重试、授权视频和资产页面全部使用真实 API；Job SSE 更新 assignment、phase、step、attempt、warm start、output 和 error；
+- 生产模式删除浏览器 timer/持久化 Job fallback，API 失败明确显示不可用且不产生假成功；仅 `VITE_DEMO_MODE=true` 启用带显式标识的本地 Demo adapter；
+- Playwright API mock 覆盖 Compute load、HQ gating、SSE 成功、release、Gateway 失败不伪造成功、模板/Agent 和移动端 sidebar；
+- Gateway capability route 增加明确的 Pydantic response model；`scripts/export-gateway-openapi.py` 导出 OpenAPI，`openapi-typescript` 生成前端 DTO，Compute/Job/Asset/Conversation response 类型不再手写重复定义；
+- `docs/development.md` 已更新真实 API、Demo mode、Runner 和 OpenAPI 生成流程。
+
+自动化检查：
+
+- `pnpm generate:api`：成功导出 `apps/web/openapi/gateway.json` 并生成 `apps/web/src/generated/gateway.ts`；
+- `pnpm check`：ESLint、TypeScript 和生产构建全部通过；
+- `uv run ruff check .`：通过；
+- `uv run pytest`：47 项通过、2 项外部依赖集成按环境开关跳过；PostgreSQL + Redis 开关全部启用时 49 项通过；
+- `pnpm --filter @oneiroi/web e2e`：Chromium 与 mobile Chromium 合计 9 项通过、1 项按 desktop/mobile 条件跳过；
+- `git diff --check` 与敏感文件模式扫描：通过。
 
 未解决阻塞：无。

@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { StudioAsset } from "@/features/studio/types";
+import { apiUrl } from "@/lib/api-client";
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("zh-CN", {
@@ -37,11 +38,20 @@ export function AssetPreviewDialog({
       {asset && (
         <DialogContent className="grid max-h-[90vh] grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1.55fr)_340px] lg:grid-rows-1">
           <div className="relative grid min-h-[320px] place-items-center overflow-hidden bg-[var(--color-preview)] lg:min-h-[620px]">
-            <img
-              alt={asset.title}
-              className="max-h-[72vh] max-w-full object-contain"
-              src={asset.previewUrl}
-            />
+            {asset.type === "video" ? (
+              <video
+                className="max-h-[72vh] max-w-full"
+                controls
+                preload="metadata"
+                src={apiUrl(asset.previewUrl)}
+              />
+            ) : (
+              <img
+                alt={asset.title}
+                className="max-h-[72vh] max-w-full object-contain"
+                src={apiUrl(asset.previewUrl)}
+              />
+            )}
             {previous && (
               <button
                 aria-label="上一个资产"
@@ -111,7 +121,7 @@ export function AssetPreviewDialog({
                 复用到生成
               </Button>
               <Button asChild variant="secondary">
-                <a download={asset.title} href={asset.previewUrl}>
+                <a download={asset.title} href={apiUrl(asset.previewUrl)}>
                   <Download aria-hidden="true" className="size-4" />
                   下载
                 </a>

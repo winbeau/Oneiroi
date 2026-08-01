@@ -1,17 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { type PropsWithChildren, useEffect, useState } from "react";
+import { type PropsWithChildren, useState } from "react";
 
-import { useStudioStore } from "@/store/studio-store";
-
-function StudioRuntime() {
-  const resumePendingJobs = useStudioStore((state) => state.resumePendingJobs);
-
-  useEffect(() => {
-    resumePendingJobs();
-  }, [resumePendingJobs]);
-
-  return null;
-}
+import { demoMode } from "@/lib/api-client";
 
 export function AppProviders({ children }: PropsWithChildren) {
   const [queryClient] = useState(
@@ -21,15 +11,20 @@ export function AppProviders({ children }: PropsWithChildren) {
           queries: {
             refetchOnWindowFocus: false,
             retry: 1,
-            staleTime: 15_000,
+            staleTime: 10_000,
           },
+          mutations: { retry: false },
         },
       }),
   );
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StudioRuntime />
+      {demoMode && (
+        <div className="fixed right-3 top-3 z-[100] rounded-full bg-[var(--color-warning)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white shadow-lg">
+          Demo mode
+        </div>
+      )}
       {children}
     </QueryClientProvider>
   );

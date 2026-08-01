@@ -1,0 +1,2395 @@
+{
+  "components": {
+    "schemas": {
+      "AssetResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mediaType": {
+            "title": "Mediatype",
+            "type": "string"
+          },
+          "previewUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previewurl"
+          },
+          "sizeBytes": {
+            "minimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "sourceJobId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourcejobid"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "image",
+              "video",
+              "template"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "createdAt",
+          "mediaType",
+          "sizeBytes"
+        ],
+        "title": "AssetResponse",
+        "type": "object"
+      },
+      "Body_upload_image_v1_uploads_images_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_image_v1_uploads_images_post",
+        "type": "object"
+      },
+      "ComputeCapabilitiesResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "maximumSelectable": {
+            "default": 4,
+            "title": "Maximumselectable",
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileCapability"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "requestedDefault": {
+            "default": 4,
+            "title": "Requesteddefault",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "profiles"
+        ],
+        "title": "ComputeCapabilitiesResponse",
+        "type": "object"
+      },
+      "ComputeSessionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allowPartial": {
+            "default": true,
+            "title": "Allowpartial",
+            "type": "boolean"
+          },
+          "gpuIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gpuids",
+            "type": "array"
+          },
+          "profilePolicy": {
+            "$ref": "#/components/schemas/ProfilePolicy",
+            "default": "balanced"
+          },
+          "requestedGpuCount": {
+            "default": 4,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Requestedgpucount",
+            "type": "integer"
+          },
+          "selectionMode": {
+            "$ref": "#/components/schemas/SelectionMode",
+            "default": "auto"
+          }
+        },
+        "title": "ComputeSessionCreate",
+        "type": "object"
+      },
+      "ComputeSessionRelease": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ReleasePolicy",
+            "default": "when_idle"
+          }
+        },
+        "title": "ComputeSessionRelease",
+        "type": "object"
+      },
+      "ComputeSessionSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "allocatedGpuCount": {
+            "title": "Allocatedgpucount",
+            "type": "integer"
+          },
+          "allowPartial": {
+            "title": "Allowpartial",
+            "type": "boolean"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errormessage"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ownerId": {
+            "title": "Ownerid",
+            "type": "string"
+          },
+          "profilePlan": {
+            "$ref": "#/components/schemas/ProfilePlan"
+          },
+          "profilePolicy": {
+            "$ref": "#/components/schemas/ProfilePolicy"
+          },
+          "readyAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readyat"
+          },
+          "releasedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Releasedat"
+          },
+          "requestedGpuCount": {
+            "title": "Requestedgpucount",
+            "type": "integer"
+          },
+          "selectionMode": {
+            "$ref": "#/components/schemas/SelectionMode"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/ComputeSlot"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ComputeSessionState"
+          }
+        },
+        "required": [
+          "id",
+          "ownerId",
+          "state",
+          "requestedGpuCount",
+          "allocatedGpuCount",
+          "selectionMode",
+          "profilePolicy",
+          "allowPartial",
+          "profilePlan",
+          "createdAt"
+        ],
+        "title": "ComputeSessionSnapshot",
+        "type": "object"
+      },
+      "ComputeSessionState": {
+        "enum": [
+          "requested",
+          "allocating",
+          "loading",
+          "ready",
+          "degraded",
+          "failed",
+          "draining",
+          "releasing",
+          "released"
+        ],
+        "title": "ComputeSessionState",
+        "type": "string"
+      },
+      "ComputeSlot": {
+        "additionalProperties": false,
+        "properties": {
+          "gpuId": {
+            "title": "Gpuid",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lasterror"
+          },
+          "loadProgress": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Loadprogress",
+            "type": "integer"
+          },
+          "loadStage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loadstage"
+          },
+          "physicalIndex": {
+            "title": "Physicalindex",
+            "type": "integer"
+          },
+          "pipelineSpecHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pipelinespechash"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/GpuState"
+          }
+        },
+        "required": [
+          "id",
+          "gpuId",
+          "physicalIndex",
+          "state"
+        ],
+        "title": "ComputeSlot",
+        "type": "object"
+      },
+      "ConversationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "default": "未命名创作",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "ConversationCreate",
+        "type": "object"
+      },
+      "ConversationPut": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "ConversationPut",
+        "type": "object"
+      },
+      "ConversationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "ConversationResponse",
+        "type": "object"
+      },
+      "GenerationDraft": {
+        "additionalProperties": false,
+        "properties": {
+          "duration": {
+            "default": 5,
+            "enum": [
+              5,
+              8,
+              10
+            ],
+            "title": "Duration",
+            "type": "integer"
+          },
+          "enhancePrompt": {
+            "default": false,
+            "title": "Enhanceprompt",
+            "type": "boolean"
+          },
+          "firstFrameAssetId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstframeassetid"
+          },
+          "firstStrength": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Firststrength",
+            "type": "number"
+          },
+          "lastFrameAssetId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastframeassetid"
+          },
+          "lastStrength": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Laststrength",
+            "type": "number"
+          },
+          "mode": {
+            "const": "I2V",
+            "default": "I2V",
+            "title": "Mode",
+            "type": "string"
+          },
+          "negativePrompt": {
+            "default": "",
+            "title": "Negativeprompt",
+            "type": "string"
+          },
+          "offload": {
+            "default": "none",
+            "enum": [
+              "none",
+              "cpu"
+            ],
+            "title": "Offload",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileTier",
+            "default": "fast"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "quantization": {
+            "default": "fp8-cast",
+            "enum": [
+              "fp8-cast",
+              "none"
+            ],
+            "title": "Quantization",
+            "type": "string"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueTier",
+            "default": "fast"
+          },
+          "ratio": {
+            "default": "16:9",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Ratio",
+            "type": "string"
+          },
+          "resolution": {
+            "default": "720p",
+            "enum": [
+              "720p",
+              "1080p"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerationDraft",
+        "type": "object"
+      },
+      "GpuAssignment": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "physicalIndex": {
+            "title": "Physicalindex",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "physicalIndex"
+        ],
+        "title": "GpuAssignment",
+        "type": "object"
+      },
+      "GpuInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "eligible": {
+            "default": false,
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "externalProcessCount": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Externalprocesscount",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lastHeartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastheartbeatat"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "physicalIndex": {
+            "minimum": 0.0,
+            "title": "Physicalindex",
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GpuState",
+            "default": "empty"
+          },
+          "temperatureCelsius": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Temperaturecelsius",
+            "type": "number"
+          },
+          "unavailableReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailablereason"
+          },
+          "utilizationPercent": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Utilizationpercent",
+            "type": "number"
+          },
+          "vramTotalMiB": {
+            "minimum": 0.0,
+            "title": "Vramtotalmib",
+            "type": "integer"
+          },
+          "vramUsedMiB": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Vramusedmib",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "physicalIndex",
+          "name",
+          "vramTotalMiB"
+        ],
+        "title": "GpuInfo",
+        "type": "object"
+      },
+      "GpuInventoryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "gpus": {
+            "items": {
+              "$ref": "#/components/schemas/GpuInfo"
+            },
+            "title": "Gpus",
+            "type": "array"
+          },
+          "maximumSelectable": {
+            "default": 4,
+            "title": "Maximumselectable",
+            "type": "integer"
+          },
+          "requestedDefault": {
+            "default": 4,
+            "title": "Requesteddefault",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "gpus"
+        ],
+        "title": "GpuInventoryResponse",
+        "type": "object"
+      },
+      "GpuState": {
+        "enum": [
+          "offline",
+          "empty",
+          "reserved",
+          "loading",
+          "ready",
+          "busy",
+          "draining",
+          "unloading",
+          "error",
+          "foreign_busy"
+        ],
+        "title": "GpuState",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JobCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "computeSessionId": {
+            "title": "Computesessionid",
+            "type": "string"
+          },
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/GenerationDraft"
+          }
+        },
+        "required": [
+          "conversationId",
+          "computeSessionId",
+          "draft"
+        ],
+        "title": "JobCreate",
+        "type": "object"
+      },
+      "JobError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "JobError",
+        "type": "object"
+      },
+      "JobOutput": {
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "title": "Assetid",
+            "type": "string"
+          },
+          "fileUrl": {
+            "title": "Fileurl",
+            "type": "string"
+          },
+          "manifestUrl": {
+            "title": "Manifesturl",
+            "type": "string"
+          },
+          "mediaType": {
+            "default": "video/mp4",
+            "title": "Mediatype",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "minimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assetId",
+          "fileUrl",
+          "manifestUrl",
+          "sizeBytes"
+        ],
+        "title": "JobOutput",
+        "type": "object"
+      },
+      "JobResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "computeSessionId": {
+            "title": "Computesessionid",
+            "type": "string"
+          },
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currentStep": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentstep"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/GenerationDraft"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GpuAssignment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobOutput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "profileId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profileid"
+          },
+          "progress": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "integer"
+          },
+          "queuePosition": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queueposition"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "totalSteps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Totalsteps"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "warmStart": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warmstart"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "computeSessionId",
+          "createdAt",
+          "updatedAt",
+          "stage",
+          "progress",
+          "draft"
+        ],
+        "title": "JobResponse",
+        "type": "object"
+      },
+      "JobStatus": {
+        "enum": [
+          "draft",
+          "uploaded",
+          "queued",
+          "assigned",
+          "loading_model",
+          "preparing",
+          "generating",
+          "encoding",
+          "cancel_requested",
+          "succeeded",
+          "cancelled",
+          "failed"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "ProfileCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "durations": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Durations",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "resolutions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resolutions",
+            "type": "array"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/ProfileTier"
+          },
+          "unavailableReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailablereason"
+          }
+        },
+        "required": [
+          "id",
+          "tier",
+          "available"
+        ],
+        "title": "ProfileCapability",
+        "type": "object"
+      },
+      "ProfilePlan": {
+        "additionalProperties": false,
+        "properties": {
+          "fast": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Fast",
+            "type": "integer"
+          },
+          "hq": {
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Hq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fast",
+          "hq"
+        ],
+        "title": "ProfilePlan",
+        "type": "object"
+      },
+      "ProfilePolicy": {
+        "enum": [
+          "balanced"
+        ],
+        "title": "ProfilePolicy",
+        "type": "string"
+      },
+      "ProfileTier": {
+        "enum": [
+          "fast",
+          "hq"
+        ],
+        "title": "ProfileTier",
+        "type": "string"
+      },
+      "QueueTier": {
+        "enum": [
+          "fast",
+          "hq"
+        ],
+        "title": "QueueTier",
+        "type": "string"
+      },
+      "ReleasePolicy": {
+        "enum": [
+          "when_idle",
+          "cancel_running"
+        ],
+        "title": "ReleasePolicy",
+        "type": "string"
+      },
+      "SelectionMode": {
+        "enum": [
+          "auto",
+          "manual"
+        ],
+        "title": "SelectionMode",
+        "type": "string"
+      },
+      "ServiceHealth": {
+        "properties": {
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "version"
+        ],
+        "title": "ServiceHealth",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Oneiroi Studio Gateway",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceHealth"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/v1/assets": {
+      "get": {
+        "operationId": "list_assets_v1_assets_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssetResponse"
+                  },
+                  "title": "Response List Assets V1 Assets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Assets",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/v1/assets/{asset_id}": {
+      "delete": {
+        "operationId": "delete_asset_v1_assets__asset_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Asset",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/v1/assets/{asset_id}/file": {
+      "get": {
+        "operationId": "get_asset_file_v1_assets__asset_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Asset File",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/v1/compute/capabilities": {
+      "get": {
+        "operationId": "get_capabilities_v1_compute_capabilities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sessionId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sessionid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeCapabilitiesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Capabilities",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
+    "/v1/compute/gpus": {
+      "get": {
+        "operationId": "get_gpus_v1_compute_gpus_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuInventoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Gpus",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
+    "/v1/compute/sessions": {
+      "post": {
+        "operationId": "create_session_v1_compute_sessions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComputeSessionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeSessionSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Session",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
+    "/v1/compute/sessions/{session_id}": {
+      "get": {
+        "operationId": "get_session_v1_compute_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeSessionSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Session",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
+    "/v1/compute/sessions/{session_id}/events": {
+      "get": {
+        "operationId": "session_events_v1_compute_sessions__session_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Events",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
+    "/v1/compute/sessions/{session_id}/release": {
+      "post": {
+        "operationId": "release_session_v1_compute_sessions__session_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComputeSessionRelease"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeSessionSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Release Session",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
+    "/v1/conversations": {
+      "get": {
+        "operationId": "list_conversations_v1_conversations_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationResponse"
+                  },
+                  "title": "Response List Conversations V1 Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Conversations",
+        "tags": [
+          "conversations"
+        ]
+      },
+      "post": {
+        "operationId": "create_conversation_v1_conversations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Conversation",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/{conversation_id}": {
+      "get": {
+        "operationId": "get_conversation_v1_conversations__conversation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation",
+        "tags": [
+          "conversations"
+        ]
+      },
+      "put": {
+        "operationId": "put_conversation_v1_conversations__conversation_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Conversation",
+        "tags": [
+          "conversations"
+        ]
+      }
+    },
+    "/v1/jobs": {
+      "get": {
+        "operationId": "list_jobs_v1_jobs_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobResponse"
+                  },
+                  "title": "Response List Jobs V1 Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/i2v": {
+      "post": {
+        "operationId": "create_job_v1_jobs_i2v_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job_v1_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/events": {
+      "get": {
+        "operationId": "job_events_v1_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Job Events",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/file": {
+      "get": {
+        "operationId": "get_job_file_v1_jobs__job_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job File",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/manifest": {
+      "get": {
+        "operationId": "get_job_manifest_v1_jobs__job_id__manifest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job Manifest",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{job_id}/retry": {
+      "post": {
+        "operationId": "retry_job_v1_jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/system/queues": {
+      "get": {
+        "operationId": "queue_catalog_v1_system_queues_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "title": "Response Queue Catalog V1 System Queues Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Queue Catalog",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/v1/uploads/images": {
+      "post": {
+        "operationId": "upload_image_v1_uploads_images_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_image_v1_uploads_images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Image",
+        "tags": [
+          "uploads"
+        ]
+      }
+    }
+  }
+}
