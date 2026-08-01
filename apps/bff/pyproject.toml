@@ -7,6 +7,7 @@ dependencies = [
     "fastapi>=0.115.8,<1",
     "httpx>=0.28.1,<1",
     "oneiroi-common",
+    "pyjwt[crypto]>=2.10.1,<3",
     "pydantic-settings>=2.7.1,<3",
     "uvicorn[standard]>=0.34.0,<1",
 ]

@@ -57,9 +57,16 @@ async def test_bff_proxies_real_job_file_and_sse(tmp_path: Path) -> None:
                 break
             await asyncio.sleep(0.02)
         video = await client.get(f"/v1/jobs/{job_id}/file")
+        video_range = await client.get(
+            f"/v1/jobs/{job_id}/file",
+            headers={"Range": "bytes=0-31"},
+        )
         events = await client.get(f"/v1/jobs/{job_id}/events")
 
     assert snapshot.json()["stage"] == "succeeded"
     assert video.headers["content-type"].startswith("video/mp4")
     assert b"ftyp" in video.content[:64]
+    assert video_range.status_code == 206
+    assert video_range.headers["content-range"].startswith("bytes 0-31/")
+    assert len(video_range.content) == 32
     assert "event: job.succeeded" in events.text

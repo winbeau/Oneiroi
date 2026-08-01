@@ -30,6 +30,10 @@ class GatewaySettings(BaseSettings):
     gpu_minimum_vram_mib: int = Field(default=70_000, ge=0)
     gpu_idle_vram_threshold_mib: int = Field(default=2_048, ge=0)
     runner_heartbeat_timeout_seconds: float = Field(default=30, gt=0, le=300)
+    service_public_key_file: Path | None = None
+    service_assertion_issuer: str = "oneiroi-pi-bff"
+    service_assertion_audience: str = "oneiroi-h100-gateway"
+    service_assertion_clock_skew_seconds: float = Field(default=10, ge=0, le=300)
     ltx_git_commit: str = ""
     ltx_distilled_checkpoint_path: str = ""
     ltx_distilled_checkpoint_sha256: str = ""

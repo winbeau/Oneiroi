@@ -31,5 +31,7 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --all-packages --frozen
+      - name: Verify FFmpeg prerequisite
+        run: command -v ffmpeg && ffmpeg -version
       - run: uv run ruff check .
       - run: uv run pytest

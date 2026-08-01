@@ -28,9 +28,9 @@
 
 ## 当前 P0
 
-1. `video.icthub.top/*` 加入与 ComfyUI 同级的 Cloudflare Access + Authentik OIDC。
-2. BFF 验证 Access JWT，删除固定用户 cookie。
-3. 把 React 从“页面可打开”推进到可回滚、可重启、可区分用户的安全 beta。
-4. 直接完成现有模型 preflight、temp cleanup/admission，然后启动 gpu-server Runner/LTX Fast 真机生成。
+1. `video.icthub.top/*` 加入与 ComfyUI 同级的 Cloudflare Access + Authentik OIDC；当前未登录仍返回 200，远端策略尚未生效。
+2. Access JWT、稳定 owner、RSA 服务断言、CSRF、Range 流式转发和固定用户 cookie 删除已在本地实现并通过测试，等待 Access application audience 后激活。
+3. immutable React static origin 与 user unit 模板已完成，等待身份门通过后部署到 Pi 并执行 reboot 恢复验收。
+4. 现有模型 preflight、temp cleanup/admission 和 gpu-server Runner/LTX Fast 真机生成保持后续阶段；不扩展 Oneiroi 自有 scheduler。
 
 完整计划见 [`production-launch.md`](./production-launch.md)，执行 Agent 从 [`START_PROMPT.md`](./START_PROMPT.md) 启动。

@@ -2,6 +2,29 @@
 
 > 探查时间：2026-08-01。远端只读探查目标：`pi5`、`h100-server`。
 
+## 0. 2026-08-01 执行记录
+
+### 已完成：身份与生产 origin 实现
+
+- BFF 新增 Cloudflare Access JWT 的 RS256/JWKS、issuer、audience、expiry 验证；生产环境不再信任浏览器 `oneiroi_user` cookie 或 `X-Oneiroi-User`。
+- `(issuer, subject)` 通过稳定 SHA-256 adapter 映射为内部 owner；conversation、asset、job 和 compute session 继续使用既有 owner 过滤。
+- Pi BFF 使用本机 RSA 私钥签发 60 秒服务断言；H100 BFF 与 Gateway 使用公钥验证，并校验断言 subject 与内部 owner header 一致。
+- mutation 增加同源 Origin CSRF 检查；下载转发支持 Range/If-Range/ETag/Content-Range 并采用流式响应。
+- Vite 已删除 `ONEIROI_API_PROXY_USER` 注入；新增 loopback Node 静态 origin、固定 release SHA 的 user unit 模板和显式 FFmpeg CI prerequisite 检查。
+- 本地证据：`pnpm check`、`pnpm check:api`、`uv run ruff check .`、`uv run pytest`（66 passed, 5 skipped）、静态 origin `/`、`/create?from=smoke`、`/healthz` 均通过。
+
+### 远端激活门
+
+- 当前外部未登录访问 `https://video.icthub.top/` 和 `/create` 仍为 HTTP 200，说明 Cloudflare Access 应用尚未生效；在完成 Authentik OIDC/group policy 和获得该 Access application audience 前，不激活新生产链路。
+- 已确认可复用的 Cloudflare team issuer 为 `https://restless-cherry-c802.cloudflareaccess.com`；`video.icthub.top` 必须使用自己的 Access application audience，不能猜测或复用错误 audience。
+- 激活前基线：Pi `18935366644f25cd88224798208793ef68bbb317`；H100 `69a53842db90bb43d6785611d385dbd66e5fe028`；本地 `main` 基线 `800bd53`。
+
+### 回滚原则
+
+- Access 策略保持启用；不得通过恢复固定 `lan-preview` 身份来回滚。若身份链路异常，先关闭 Oneiroi public ingress，再把 Pi/H100 checkout 切回上述基线 SHA 并恢复原进程命令。
+- Pi 回滚目标：原 `oneiroi-studio.service`、`oneiroi-studio-loopback.service` 和 `cloudflared-video.service`；新 user units 仅在健康检查通过后替换旧服务。
+- H100 回滚目标：Gateway `127.0.0.1:18010` 和 BFF `10.30.176.95:18000` 的原 supervisor/前台启动方式；不删除 storage、temp、模型或数据库文件。
+
 ## 1. 第一目标
 
 最优先把 Oneiroi React 以可登录、可区分用户、可回滚的方式上线 `video.icthub.top`，再接通 gpu-server 的真实 LTX 视频生成。

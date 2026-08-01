@@ -5,6 +5,7 @@ from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from oneiroi_common.api import ServiceHealth
+from oneiroi_common.identity import SERVICE_ASSERTION_HEADER
 from oneiroi_common.jobs import QueueTier
 from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
@@ -17,6 +18,11 @@ from oneiroi_gateway.routes.compute import create_compute_router
 from oneiroi_gateway.routes.conversations import create_conversation_router
 from oneiroi_gateway.routes.jobs import create_job_router
 from oneiroi_gateway.routes.uploads import create_upload_router
+from oneiroi_gateway.service_auth import (
+    ServiceAssertionValidator,
+    ServiceAuthConfigurationError,
+    ServiceAuthenticationError,
+)
 from oneiroi_gateway.services.artifact_service import ArtifactService
 from oneiroi_gateway.services.capabilities import CapabilityService
 from oneiroi_gateway.services.compute_sessions import (
@@ -56,6 +62,12 @@ def create_app(
     job_service: JobService | None = None,
 ) -> FastAPI:
     app_settings = settings or get_settings()
+    service_validator = ServiceAssertionValidator(
+        app_settings.service_public_key_file,
+        issuer=app_settings.service_assertion_issuer,
+        audience=app_settings.service_assertion_audience,
+        clock_skew_seconds=app_settings.service_assertion_clock_skew_seconds,
+    )
     managed_compute_service = compute_session_service is None
     if inventory_service is None:
         provider = (
@@ -186,15 +198,26 @@ def create_app(
         protected = request.url.path.startswith("/v1/") and not request.url.path.startswith(
             "/v1/system/"
         )
-        if (
-            app_settings.environment != "development"
-            and protected
-            and not request.headers.get("X-Oneiroi-User", "").strip()
-        ):
-            return JSONResponse(
-                {"detail": "AUTHENTICATION_REQUIRED"},
-                status_code=status.HTTP_401_UNAUTHORIZED,
-            )
+        if app_settings.environment != "development" and protected:
+            user = request.headers.get("X-Oneiroi-User", "").strip()
+            assertion = request.headers.get(SERVICE_ASSERTION_HEADER, "")
+            try:
+                asserted_owner = service_validator.validate(assertion)
+            except ServiceAuthConfigurationError:
+                return JSONResponse(
+                    {"detail": "AUTHENTICATION_NOT_CONFIGURED"},
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            except ServiceAuthenticationError:
+                return JSONResponse(
+                    {"detail": "AUTHENTICATION_REQUIRED"},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+            if not user or user != asserted_owner:
+                return JSONResponse(
+                    {"detail": "AUTHENTICATION_REQUIRED"},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
         return await call_next(request)
 
     system_router = APIRouter(tags=["system"])

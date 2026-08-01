@@ -44,7 +44,11 @@ class GatewayClient:
         client = self._client()
         url = f"{path}?{query}" if query else path
         request = client.build_request(method, url, headers=headers)
-        response = await client.send(request, stream=True)
+        try:
+            response = await client.send(request, stream=True)
+        except Exception:
+            await client.aclose()
+            raise
 
         async def body() -> AsyncIterator[bytes]:
             try:

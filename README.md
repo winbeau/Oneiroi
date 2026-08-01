@@ -45,11 +45,15 @@ pnpm dev:host
 # http://<本机内网IP>:5173
 ```
 
-树莓派构建并监听所有接口：
+树莓派构建并只监听 Tunnel 使用的 loopback origin：
 
 ```bash
-scripts/deploy-web-pi.sh --mode preview --host 0.0.0.0 --port 4173
+ONEIROI_BFF_TARGET=http://127.0.0.1:8000 \
+scripts/deploy-web-pi.sh --mode static --host 127.0.0.1 --port 4173 \
+  --release-sha "$(git rev-parse HEAD)"
 ```
+
+生产 BFF 必须先配置 Cloudflare Access issuer/audience/JWKS 和 RSA 服务断言密钥；浏览器 cookie/header 不能直接指定 owner。用户级 unit 模板位于 `infra/systemd/user/`。
 
 前端复刻与部署方案见 [`docs/frontend-replication-plan.md`](./docs/frontend-replication-plan.md)。LTX Desktop 启发的动态 1–4 张 H100、显式热加载/释放和前端兼容方案见 [`docs/ltx-desktop-inspired-backend-plan.md`](./docs/ltx-desktop-inspired-backend-plan.md)。
 

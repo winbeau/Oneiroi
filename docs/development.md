@@ -48,17 +48,27 @@ pnpm dev:host
 # http://<本机内网IP>:5173
 ```
 
-树莓派部署/预览：
+树莓派安全生产部署：
+
+1. Pi BFF 使用 `Cf-Access-Jwt-Assertion` 验证 Cloudflare Access JWT，并把 `(issuer, subject)` 映射成稳定 owner；不要设置或恢复 `ONEIROI_API_PROXY_USER`。
+2. Pi BFF 用只读配置文件中的 RSA 私钥签发短时服务断言；H100 BFF 和 Gateway 只接受该断言，不接受浏览器伪造的 `X-Oneiroi-User`。
+3. 用 `infra/systemd/user/oneiroi-bff.service` 和 `oneiroi-web.service` 部署；web unit 只运行已经构建的 immutable `dist/`，不在启动时 pull/install/build。
 
 ```bash
-ONEIROI_API_PROXY_TARGET=http://<private-bff-ip>:18000 \
-ONEIROI_API_PROXY_USER=lan-preview \
-scripts/deploy-web-pi.sh --mode preview --host <pi-lan-ip> --port 4173
+# 先由 Cloudflare Access 应用配置提供这三个非 secret 参数
+export ONEIROI_BFF_ACCESS_ISSUER=https://<team>.cloudflareaccess.com
+export ONEIROI_BFF_ACCESS_AUDIENCE=<access-application-audience>
+export ONEIROI_BFF_ACCESS_JWKS_URL=https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
+
+# 同源静态 origin；BFF target 只应是 loopback
+ONEIROI_BFF_TARGET=http://127.0.0.1:8000 \
+scripts/deploy-web-pi.sh --mode static --host 127.0.0.1 --port 4173 \
+  --release-sha <release-sha>
 ```
 
-`ONEIROI_API_PROXY_TARGET` 同时用于 Vite dev/preview 的 `/v1` 与 `/healthz` proxy。可选的 `ONEIROI_API_PROXY_USER` 只在服务端向 private BFF 注入身份 cookie，必须同时满足以下条件：WebUI 只绑定可信 LAN 地址、BFF 只绑定可信私网接口、没有公网/Tunnel ingress。公网部署不得使用固定 LAN identity，必须接入真实认证。
+`ONEIROI_API_PROXY_TARGET` 仅供本地 Vite dev/preview 使用；它不再注入用户 cookie。公网部署必须由 BFF 验证 Access JWT，未配置 issuer/audience/JWKS 或服务断言密钥时应拒绝请求。
 
-当前 `pi5` 部署使用用户级 `oneiroi-studio.service`，可通过以下命令检查：
+当前 `pi5` 部署使用用户级 `oneiroi-studio.service`，生产配置应迁移到仓库内的 `infra/systemd/user/` unit，可通过以下命令检查：
 
 ```bash
 systemctl --user status oneiroi-studio.service
