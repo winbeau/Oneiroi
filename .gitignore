@@ -33,6 +33,7 @@ Thumbs.db
 
 # Local reference clones and agent state
 .beaupi/
+/gpt-tmp/
 /LTX-2/
 /xju-feiyue/
 

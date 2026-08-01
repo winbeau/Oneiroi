@@ -7,6 +7,7 @@
 - [`START_PROMPT.md`](./START_PROMPT.md)：可直接交给 Oneiroi 编码 Agent 的启动提示词。
 - [`plan.md`](./plan.md)：身份、artifact、GPU API、Pi 部署和 GitHub transfer 的长期重构计划。
 - [`roadmap/`](./roadmap/)：基于当前代码与生产事实的进度盘点、优先级路线图和分模块实施计划。
+- [`agent-upgrade/`](./agent-upgrade/)：参考 GPT 5.6 Responses 配置的 LLM Agent、图片生成、工具审批和分阶段升级计划。
 - [`resources/`](./resources/)：现有 contract 快照和 xju-feiyue 设计资源。
 
 现有 Oneiroi 已有大量可复用实现，目标是抽取边界而非重写。
