@@ -6,6 +6,7 @@ OWNER="${ONEIROI_PRIVATE_API_OWNER:-private-api-smoke}"
 RUN_GPU="${ONEIROI_PRIVATE_API_GPU:-0}"
 FIRST_FRAME="${ONEIROI_PRIVATE_API_FIRST_FRAME:-}"
 TIMEOUT_SECONDS="${ONEIROI_PRIVATE_API_TIMEOUT_SECONDS:-1800}"
+PYTHON_BIN="${ONEIROI_PRIVATE_API_PYTHON:-python3}"
 COOKIE="oneiroi_user=$OWNER"
 SESSION_ID=""
 TMP_DIR="$(mktemp -d)"
@@ -31,7 +32,7 @@ request() {
 
 json_field() {
     local expression="$1"
-    python -c 'import json,sys
+    "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 for part in sys.argv[1].split("."):
     value=value[int(part)] if isinstance(value,list) else value[part]
@@ -41,7 +42,7 @@ print(value)' "$expression"
 assert_json() {
     local expression="$1"
     local expected="$2"
-    python -c 'import json,sys
+    "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 for part in sys.argv[1].split("."):
     value=value[int(part)] if isinstance(value,list) else value[part]
@@ -55,7 +56,7 @@ printf 'GET /healthz\n'
 request "$BASE_URL/healthz" | assert_json service bff
 
 printf 'GET /v1/compute/capabilities\n'
-request "$BASE_URL/v1/compute/capabilities" | python -c 'import json,sys
+request "$BASE_URL/v1/compute/capabilities" | "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 assert value["requestedDefault"] == 4
 assert value["maximumSelectable"] == 4
@@ -77,7 +78,7 @@ for _ in 1 2; do
         -X PUT \
         -d '{"title":"Private API smoke updated"}' \
         "$BASE_URL/v1/conversations/$CONVERSATION_ID" \
-        | python -c 'import json,sys
+        | "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 assert value["id"] == sys.argv[1]
 assert value["title"] == "Private API smoke updated"' "$CONVERSATION_ID"
@@ -86,7 +87,7 @@ done
 printf 'GET conversation detail/list and PUT negative cases\n'
 request "$BASE_URL/v1/conversations/$CONVERSATION_ID" \
     | assert_json title 'Private API smoke updated'
-request "$BASE_URL/v1/conversations" | python -c 'import json,sys
+request "$BASE_URL/v1/conversations" | "$PYTHON_BIN" -c 'import json,sys
 items=json.load(sys.stdin)
 conversation_id=sys.argv[1]
 assert sum(item["id"] == conversation_id for item in items) == 1' "$CONVERSATION_ID"
@@ -114,7 +115,7 @@ fi
 
 printf 'GET /v1/compute/gpus\n'
 INVENTORY="$(request "$BASE_URL/v1/compute/gpus")"
-printf '%s' "$INVENTORY" | python -c 'import json,sys
+printf '%s' "$INVENTORY" | "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 assert value["requestedDefault"] == 4
 assert value["maximumSelectable"] == 4
@@ -131,7 +132,7 @@ SESSION_RESPONSE="$(request \
     -d '{"requestedGpuCount":1,"selectionMode":"auto","gpuIds":[],"profilePolicy":"balanced","allowPartial":true}' \
     "$BASE_URL/v1/compute/sessions")"
 SESSION_ID="$(printf '%s' "$SESSION_RESPONSE" | json_field id)"
-printf '%s' "$SESSION_RESPONSE" | python -c 'import json,sys
+printf '%s' "$SESSION_RESPONSE" | "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 assert value["allocatedGpuCount"] == 1
 assert value["profilePlan"] == {"fast": 1, "hq": 0}
@@ -150,7 +151,7 @@ set -e
 grep -q 'event: compute.session.ready' "$TMP_DIR/compute-events.txt"
 
 printf 'GET one-card capabilities (HQ hard-disabled)\n'
-request "$BASE_URL/v1/compute/capabilities?sessionId=$SESSION_ID" | python -c 'import json,sys
+request "$BASE_URL/v1/compute/capabilities?sessionId=$SESSION_ID" | "$PYTHON_BIN" -c 'import json,sys
 value=json.load(sys.stdin)
 fast=next(item for item in value["profiles"] if item["tier"] == "fast")
 hq=next(item for item in value["profiles"] if item["tier"] == "hq")
@@ -167,7 +168,7 @@ UPLOAD_RESPONSE="$(request \
 ASSET_ID="$(printf '%s' "$UPLOAD_RESPONSE" | json_field id)"
 
 printf 'POST real Fast I2V job\n'
-JOB_PAYLOAD="$(python -c 'import json,sys
+JOB_PAYLOAD="$("$PYTHON_BIN" -c 'import json,sys
 print(json.dumps({
   "conversationId": sys.argv[1],
   "computeSessionId": sys.argv[2],
@@ -219,7 +220,7 @@ grep -q 'event: job.succeeded' "$TMP_DIR/job-events.txt"
 printf 'GET job file and manifest\n'
 request "$BASE_URL/v1/jobs/$JOB_ID/file" >"$TMP_DIR/result.mp4"
 request "$BASE_URL/v1/jobs/$JOB_ID/manifest" >"$TMP_DIR/manifest.json"
-python -c 'import json,sys
+"$PYTHON_BIN" -c 'import json,sys
 value=json.load(open(sys.argv[1], encoding="utf-8"))
 assert value["jobId"] == sys.argv[2]
 assert "path" not in json.dumps(value).lower()' "$TMP_DIR/manifest.json" "$JOB_ID"
