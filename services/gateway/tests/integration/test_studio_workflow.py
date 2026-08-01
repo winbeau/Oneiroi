@@ -8,6 +8,7 @@ from PIL import Image
 
 from oneiroi_common.compute import GpuInfo, GpuState
 from oneiroi_gateway.main import create_app
+from oneiroi_gateway.routes.jobs import _public_manifest
 from oneiroi_gateway.services.compute_sessions import ComputeSessionService, RecordingComputeBackend
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService, InMemoryInventoryProvider
 from oneiroi_gateway.services.job_execution import FakeJobExecutor
@@ -18,6 +19,20 @@ def png_bytes() -> bytes:
     output = io.BytesIO()
     Image.new("RGB", (64, 64), color=(30, 40, 50)).save(output, format="PNG")
     return output.getvalue()
+
+
+def test_public_manifest_removes_path_bearing_fields() -> None:
+    manifest = _public_manifest(
+        {
+            "checkpointPath": "/models/checkpoint.safetensors",
+            "pipelineSpec": {
+                "loraPathsAndScales": [["/models/lora.safetensors", 1.0]],
+                "profileId": "fast",
+            },
+        }
+    )
+
+    assert manifest == {"pipelineSpec": {"profileId": "fast"}}
 
 
 class FailingDispatcher:

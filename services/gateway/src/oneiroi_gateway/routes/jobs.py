@@ -138,7 +138,7 @@ def _public_manifest(value):
         return {
             key: _public_manifest(item)
             for key, item in value.items()
-            if not key.lower().endswith("path")
+            if "path" not in key.lower()
         }
     if isinstance(value, list):
         return [_public_manifest(item) for item in value]
