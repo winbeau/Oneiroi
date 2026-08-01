@@ -7,6 +7,7 @@ RUN_GPU="${ONEIROI_PRIVATE_API_GPU:-0}"
 FIRST_FRAME="${ONEIROI_PRIVATE_API_FIRST_FRAME:-}"
 TIMEOUT_SECONDS="${ONEIROI_PRIVATE_API_TIMEOUT_SECONDS:-1800}"
 PYTHON_BIN="${ONEIROI_PRIVATE_API_PYTHON:-python3}"
+FIXED_IDENTITY="${ONEIROI_PRIVATE_API_FIXED_IDENTITY:-0}"
 COOKIE="oneiroi_user=$OWNER"
 SESSION_ID=""
 TMP_DIR="$(mktemp -d)"
@@ -92,10 +93,12 @@ items=json.load(sys.stdin)
 conversation_id=sys.argv[1]
 assert sum(item["id"] == conversation_id for item in items) == 1' "$CONVERSATION_ID"
 
-WRONG_STATUS="$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' \
-    -H 'Cookie: oneiroi_user=private-api-other' \
-    "$BASE_URL/v1/conversations/$CONVERSATION_ID")"
-[[ "$WRONG_STATUS" == 404 ]]
+if [[ "$FIXED_IDENTITY" != 1 ]]; then
+    WRONG_STATUS="$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' \
+        -H 'Cookie: oneiroi_user=private-api-other' \
+        "$BASE_URL/v1/conversations/$CONVERSATION_ID")"
+    [[ "$WRONG_STATUS" == 404 ]]
+fi
 INVALID_STATUS="$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' \
     -H "Cookie: $COOKIE" \
     -H 'Content-Type: application/json' \
