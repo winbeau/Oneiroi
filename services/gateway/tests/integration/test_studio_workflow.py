@@ -21,6 +21,26 @@ def png_bytes() -> bytes:
     return output.getvalue()
 
 
+@pytest.mark.asyncio
+async def test_malformed_png_returns_validation_error(tmp_path: Path) -> None:
+    app = workflow_app(tmp_path)
+    transport = ASGITransport(app=app)
+    malformed_png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+        "0000000d49444154789c6360f8cfc0000004010100f41c2fa50000000049454e44"
+        "ae426082"
+    )
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/uploads/images",
+            files={"file": ("malformed.png", malformed_png, "image/png")},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "INVALID_IMAGE"
+
+
 def test_public_manifest_removes_path_bearing_fields() -> None:
     manifest = _public_manifest(
         {

@@ -43,7 +43,7 @@ class ArtifactService:
                 image.verify()
             with Image.open(io.BytesIO(content)) as image:
                 width, height = image.size
-        except (UnidentifiedImageError, OSError) as exc:
+        except (UnidentifiedImageError, OSError, SyntaxError) as exc:
             raise ValueError("INVALID_IMAGE") from exc
 
         asset_id = f"asset-{uuid4().hex[:20]}"
