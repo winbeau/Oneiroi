@@ -1,6 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 
-type BackendOptions = { gpuCount?: number; failRequests?: boolean };
+type BackendOptions = {
+  gpuCount?: number;
+  failRequests?: boolean;
+  emitComputeReadyEvent?: boolean;
+  onComputeEventsRequest?: () => void;
+};
 
 async function mockBackend(page: Page, options: BackendOptions = {}) {
   const gpuCount = options.gpuCount ?? 1;
@@ -90,7 +95,11 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
       const hq = allocated === 4 ? 2 : allocated >= 2 ? 1 : 0;
       session = {
         id: "compute-e2e",
-        state: allocated < 4 ? "degraded" : "ready",
+        state: options.emitComputeReadyEvent
+          ? "loading"
+          : allocated < 4
+            ? "degraded"
+            : "ready",
         requestedGpuCount: 4,
         allocatedGpuCount: allocated,
         selectionMode: "auto",
@@ -101,10 +110,10 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
           id: `slot-${index}`,
           gpuId: `GPU-e2e-${index}`,
           physicalIndex: index,
-          state: "ready",
+          state: options.emitComputeReadyEvent ? "loading" : "ready",
           profile: index < fast ? "fast" : "hq",
-          loadStage: "ready",
-          loadProgress: 100,
+          loadStage: options.emitComputeReadyEvent ? "loading_model" : "ready",
+          loadProgress: options.emitComputeReadyEvent ? 60 : 100,
         })),
       };
       return json(session, 202);
@@ -113,6 +122,24 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
       return json(session);
     }
     if (path.endsWith("/compute/sessions/compute-e2e/events")) {
+      options.onComputeEventsRequest?.();
+      if (options.emitComputeReadyEvent && session) {
+        session = {
+          ...session,
+          state: "ready",
+          slots: (session.slots as Array<Record<string, unknown>>).map((slot) => ({
+            ...slot,
+            state: "ready",
+            loadStage: "ready",
+            loadProgress: 100,
+          })),
+        };
+        return route.fulfill({
+          status: 200,
+          contentType: "text/event-stream",
+          body: `id: 1\nevent: compute.session.ready\ndata: ${JSON.stringify(session)}\n\n`,
+        });
+      }
       return route.fulfill({ status: 200, contentType: "text/event-stream", body: ": heartbeat\n\n" });
     }
     if (path.endsWith("/compute/sessions/compute-e2e/release") && method === "POST") {
@@ -214,6 +241,24 @@ test("compute load works when crypto.randomUUID is unavailable", async ({ page }
   await page.getByRole("button", { name: "开始热加载" }).click();
 
   await expect(page.getByText(/1 张 H100/)).toBeVisible();
+});
+
+test("compute SSE does not reconnect when a snapshot updates", async ({ page }) => {
+  let eventRequests = 0;
+  await mockBackend(page, {
+    gpuCount: 1,
+    emitComputeReadyEvent: true,
+    onComputeEventsRequest: () => {
+      eventRequests += 1;
+    },
+  });
+  await page.goto("/create");
+  await page.getByRole("button", { name: "热加载" }).click();
+  await page.getByRole("button", { name: "开始热加载" }).click();
+
+  await expect(page.getByText(/1 张 H100/)).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(eventRequests).toBe(1);
 });
 
 test("release returns compute control to the empty state", async ({ page }) => {

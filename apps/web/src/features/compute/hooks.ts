@@ -51,38 +51,41 @@ export function useComputeSession() {
 export function useComputeSessionEvents(session?: ComputeSession) {
   const queryClient = useQueryClient();
   const clearActiveSession = useComputeUiStore((state) => state.clearActiveSession);
+  const sessionId = session?.id ?? "";
+  const terminal = !session || ["released", "failed"].includes(session.state);
 
   useEffect(() => {
-    if (demoMode || !session || ["released", "failed"].includes(session.state)) return;
-    const source = new EventSource(apiUrl(`/v1/compute/sessions/${session.id}/events`));
+    if (demoMode || !sessionId || terminal) return;
+    const source = new EventSource(apiUrl(`/v1/compute/sessions/${sessionId}/events`));
     const update = (event: Event) => {
       const next = JSON.parse((event as MessageEvent<string>).data) as ComputeSession;
-      queryClient.setQueryData(computeKeys.session(session.id), next);
+      queryClient.setQueryData(computeKeys.session(sessionId), next);
       void queryClient.invalidateQueries({
-        queryKey: computeKeys.capabilities(session.id),
+        queryKey: computeKeys.capabilities(sessionId),
       });
-      if (next.state === "released") {
+      if (["released", "failed"].includes(next.state)) {
         source.close();
-        clearActiveSession();
+        if (next.state === "released") clearActiveSession();
       }
     };
     for (const eventName of [
       "compute.session.updated",
       "compute.session.ready",
       "compute.session.degraded",
+      "compute.session.failed",
       "compute.session.released",
     ]) {
       source.addEventListener(eventName, update);
     }
     source.addEventListener("compute.slot.updated", () => {
-      void queryClient.invalidateQueries({ queryKey: computeKeys.session(session.id) });
+      void queryClient.invalidateQueries({ queryKey: computeKeys.session(sessionId) });
     });
     source.addEventListener("error", () => {
       source.close();
-      void queryClient.invalidateQueries({ queryKey: computeKeys.session(session.id) });
+      void queryClient.invalidateQueries({ queryKey: computeKeys.session(sessionId) });
     });
     return () => source.close();
-  }, [clearActiveSession, queryClient, session]);
+  }, [clearActiveSession, queryClient, sessionId, terminal]);
 }
 
 export function useCreateComputeSession() {
