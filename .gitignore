@@ -40,6 +40,8 @@ Thumbs.db
 uploads/
 outputs/
 models/
+!services/gateway/src/oneiroi_gateway/db/models/
+!services/gateway/src/oneiroi_gateway/db/models/*.py
 *.mp4
 *.safetensors
 *.ckpt
