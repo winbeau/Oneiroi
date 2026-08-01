@@ -243,3 +243,14 @@ H100 真实验证（2026-07-31）：
 部署边界：目标 SSH 容器身份为 root，因此真实 M8 Runner 使用 development process mode；production Runner 拒绝 root 已在 M7 验证，正式容器必须使用专用非 root `USER`，不能关闭该保护。
 
 未解决阻塞：无。
+
+## M9：首尾帧、热复用与 lease 自动卸载
+
+2026-08-02 在 H100 loopback 上补充验证首帧+尾帧产品链路，并修复 gpu-server 的 managed PID 与 stale-fence release：
+
+- Oneiroi 5 秒 Fast I2V 输出 H.264 1280×704、121 帧，首输出更接近首输入、尾输出更接近尾输入；
+- 同 lease/profile 的第二个真实 job 复用同一模型 child PID，不再被 NVML 误判为 foreign process；
+- lease release 后 worker 自动卸载 child，GPU 回到 0 MiB，attempt temp 和 managed PID registry 清空；
+- 完整证据见 `docs/ltx-backend-plan/m9-first-last-gpu-server-e2e.md`。
+
+未解决阻塞：无。
