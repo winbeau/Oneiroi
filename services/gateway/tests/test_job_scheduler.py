@@ -35,6 +35,7 @@ async def test_ready_slot_allows_only_one_job_at_a_time() -> None:
     second = await scheduler.reserve("owner", session.id, ProfileTier.FAST)
 
     assert second.slot_id == reservation.slot_id
+    await sessions.close()
 
 
 @pytest.mark.asyncio
@@ -71,3 +72,4 @@ async def test_four_ready_slots_run_four_jobs_without_double_assignment() -> Non
         await scheduler.reserve("owner", session.id, ProfileTier.FAST)
     for reservation in reservations:
         await scheduler.release(reservation)
+    await sessions.close()
