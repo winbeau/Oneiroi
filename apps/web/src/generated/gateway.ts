@@ -38,6 +38,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Run */
+        post: operations["create_run_v1_agent_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_v1_agent_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run */
+        post: operations["cancel_run_v1_agent_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Events */
+        get: operations["run_events_v1_agent_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Messages */
+        get: operations["list_messages_v1_agent_threads__thread_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assets": {
         parameters: {
             query?: never;
@@ -220,6 +305,23 @@ export interface paths {
         get: operations["get_conversation_v1_conversations__conversation_id__get"];
         /** Put Conversation */
         put: operations["put_conversation_v1_conversations__conversation_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/conversations/{conversation_id}/agent/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Thread */
+        get: operations["get_thread_v1_conversations__conversation_id__agent_thread_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -458,6 +560,175 @@ export interface components {
              */
             websocketVerified: boolean;
         };
+        /** AgentMessageContent */
+        AgentMessageContent: {
+            draftProposal?: components["schemas"]["DraftProposal"] | null;
+            /** Rationale */
+            rationale?: string[];
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** AgentMessageResponse */
+        AgentMessageResponse: {
+            /** Completedat */
+            completedAt?: string | null;
+            content: components["schemas"]["AgentMessageContent"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Id */
+            id: string;
+            /** Provideritemid */
+            providerItemId?: string | null;
+            role: components["schemas"]["AgentMessageRole"];
+            /** Runid */
+            runId?: string | null;
+            /** Sequence */
+            sequence: number;
+            status: components["schemas"]["AgentMessageStatus"];
+            /** Threadid */
+            threadId: string;
+        };
+        /**
+         * AgentMessageRole
+         * @enum {string}
+         */
+        AgentMessageRole: "user" | "assistant" | "tool" | "system_summary";
+        /**
+         * AgentMessageStatus
+         * @enum {string}
+         */
+        AgentMessageStatus: "streaming" | "completed" | "failed";
+        /** AgentRunCreate */
+        AgentRunCreate: {
+            /** Assetids */
+            assetIds?: string[];
+            /** Conversationid */
+            conversationId: string;
+            draftSnapshot: components["schemas"]["GenerationDraft"];
+            /** Message */
+            message: string;
+            /**
+             * Mode
+             * @default assist
+             * @enum {string}
+             */
+            mode: "assist" | "image-analysis" | "storyboard";
+        };
+        /** AgentRunResponse */
+        AgentRunResponse: {
+            /** Conversationid */
+            conversationId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Inputsnapshot */
+            inputSnapshot: {
+                [key: string]: unknown;
+            };
+            /** Model */
+            model: string;
+            /** Outputmessageid */
+            outputMessageId?: string | null;
+            /** Promptversion */
+            promptVersion: string;
+            /** Provider */
+            provider: string;
+            /** Providerresponseid */
+            providerResponseId?: string | null;
+            /** Reasoningeffort */
+            reasoningEffort: string;
+            /** Startedat */
+            startedAt?: string | null;
+            status: components["schemas"]["AgentRunStatus"];
+            /** Threadid */
+            threadId: string;
+            /** Toolsetversion */
+            toolsetVersion: string;
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "sse" | "websocket";
+            usage?: components["schemas"]["AgentUsage"];
+        };
+        /**
+         * AgentRunStatus
+         * @enum {string}
+         */
+        AgentRunStatus: "queued" | "streaming" | "waiting_approval" | "executing_tool" | "cancelling" | "cancelled" | "completed" | "failed" | "expired" | "recovering";
+        /** AgentThreadResponse */
+        AgentThreadResponse: {
+            /** Conversationid */
+            conversationId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Id */
+            id: string;
+            /** Promptversion */
+            promptVersion: string;
+            status: components["schemas"]["AgentThreadStatus"];
+            /**
+             * Summarycursor
+             * @default 0
+             */
+            summaryCursor: number;
+            /** Summarytext */
+            summaryText?: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * AgentThreadStatus
+         * @enum {string}
+         */
+        AgentThreadStatus: "active" | "archived";
+        /** AgentUsage */
+        AgentUsage: {
+            /**
+             * Inputtokens
+             * @default 0
+             */
+            inputTokens: number;
+            /**
+             * Outputtokens
+             * @default 0
+             */
+            outputTokens: number;
+            /**
+             * Providerrequests
+             * @default 0
+             */
+            providerRequests: number;
+            /**
+             * Totaltokens
+             * @default 0
+             */
+            totalTokens: number;
+        };
         /** AssetResponse */
         AssetResponse: {
             /**
@@ -623,6 +894,29 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
+        };
+        /** DraftProposal */
+        DraftProposal: {
+            /** Duration */
+            duration?: (5 | 8 | 10) | null;
+            /** Firstframeassetid */
+            firstFrameAssetId?: string | null;
+            /** Firststrength */
+            firstStrength?: number | null;
+            /** Lastframeassetid */
+            lastFrameAssetId?: string | null;
+            /** Laststrength */
+            lastStrength?: number | null;
+            /** Negativeprompt */
+            negativePrompt?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /** Ratio */
+            ratio?: ("16:9" | "9:16" | "1:1") | null;
+            /** Resolution */
+            resolution?: ("720p" | "1080p") | null;
+            /** Seed */
+            seed?: number | null;
         };
         /** GenerationDraft */
         GenerationDraft: {
@@ -973,6 +1267,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCapabilitiesResponse"];
+                };
+            };
+        };
+    };
+    create_run_v1_agent_runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_v1_agent_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_v1_agent_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_events_v1_agent_runs__run_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_messages_v1_agent_threads__thread_id__messages_get: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1388,6 +1854,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_v1_conversations__conversation_id__agent_thread_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentThreadResponse"];
                 };
             };
             /** @description Validation Error */

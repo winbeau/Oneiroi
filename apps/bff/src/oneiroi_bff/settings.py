@@ -16,6 +16,7 @@ class BffSettings(BaseSettings):
     gateway_base_url: HttpUrl = HttpUrl("http://127.0.0.1:8010")
     request_timeout_seconds: float = Field(default=300, gt=0, le=7_200)
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, gt=0)
+    max_agent_json_bytes: int = Field(default=256 * 1024, gt=0, le=1024 * 1024)
     access_issuer: str = ""
     access_audience: str = ""
     access_jwks_url: str = ""

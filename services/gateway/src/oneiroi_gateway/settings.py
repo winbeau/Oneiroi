@@ -57,6 +57,7 @@ class GatewaySettings(BaseSettings):
     agent_stream_timeout_seconds: float = Field(default=180, gt=0, le=1_800)
     agent_max_run_seconds: float = Field(default=300, gt=0, le=3_600)
     agent_max_output_tokens: int = Field(default=4_000, ge=1, le=100_000)
+    agent_max_events_per_run: int = Field(default=1_000, ge=10, le=10_000)
     agent_max_input_images: int = Field(default=4, ge=0, le=8)
     agent_max_image_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     agent_max_retries: int = Field(default=2, ge=0, le=5)

@@ -7,6 +7,9 @@ from fastapi.responses import JSONResponse
 from oneiroi_common.api import ServiceHealth
 from oneiroi_common.identity import SERVICE_ASSERTION_HEADER
 from oneiroi_common.jobs import QueueTier
+from oneiroi_gateway.agent.openai_responses import OpenAIResponsesProvider
+from oneiroi_gateway.agent.protocol import AgentProvider
+from oneiroi_gateway.agent.runtime import AgentRuntime
 from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.gpu_server import (
     GpuServerClient,
@@ -17,7 +20,9 @@ from oneiroi_gateway.gpu_server import (
 )
 from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
 from oneiroi_gateway.redis.leases import RedisLeaseStore
+from oneiroi_gateway.repositories.agent import AgentRepository, InMemoryAgentRepository
 from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
+from oneiroi_gateway.repositories.sql_agent import SqlAgentRepository
 from oneiroi_gateway.repositories.sql_studio import SqlStudioRepository
 from oneiroi_gateway.repositories.studio import InMemoryStudioRepository, StudioRepository
 from oneiroi_gateway.routes.agent import create_agent_router
@@ -66,6 +71,9 @@ def create_app(
     compute_session_service: ComputeSessionService | None = None,
     capability_service: CapabilityService | None = None,
     agent_capability_service: AgentCapabilityService | None = None,
+    agent_repository: AgentRepository | None = None,
+    agent_provider: AgentProvider | None = None,
+    agent_runtime: AgentRuntime | None = None,
     repository: StudioRepository | None = None,
     job_dispatcher: JobDispatcher | None = None,
     job_executor: JobExecutor | None = None,
@@ -164,6 +172,33 @@ def create_app(
             repository = InMemoryStudioRepository()
     if managed_compute_service and database_sessions is not None:
         compute_session_service.state_repository = SqlComputeStateRepository(database_sessions)
+    if agent_repository is None:
+        agent_repository = (
+            SqlAgentRepository(database_sessions)
+            if database_sessions is not None
+            else InMemoryAgentRepository()
+        )
+    if agent_provider is None and agent_capability_service.get().available:
+        assert app_settings.agent_api_key is not None
+        agent_provider = OpenAIResponsesProvider(
+            app_settings.agent_base_url,
+            app_settings.agent_api_key.get_secret_value(),
+            model=app_settings.agent_model,
+            reasoning_effort=app_settings.agent_reasoning_effort,
+            image_model=app_settings.agent_image_model or None,
+            websocket_declared=app_settings.agent_provider_websocket_declared,
+            connect_timeout_seconds=app_settings.agent_connect_timeout_seconds,
+            stream_timeout_seconds=app_settings.agent_stream_timeout_seconds,
+            max_run_seconds=app_settings.agent_max_run_seconds,
+            max_retries=app_settings.agent_max_retries,
+            max_retry_delay_seconds=app_settings.agent_max_retry_delay_seconds,
+        )
+    agent_runtime = agent_runtime or AgentRuntime(
+        agent_repository,
+        repository,
+        agent_provider,
+        app_settings,
+    )
     artifacts = ArtifactService(
         repository,
         app_settings.storage_root,
@@ -213,6 +248,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await compute_session_service.restore()
+        await agent_runtime.recover_incomplete()
         await job_service.restore_inflight()
         heartbeat_stop = asyncio.Event()
         heartbeat_task = (
@@ -228,6 +264,7 @@ def create_app(
         finally:
             if heartbeat_task is not None and heartbeat_monitor is not None:
                 await heartbeat_monitor.stop(heartbeat_task, heartbeat_stop)
+            await agent_runtime.close()
             await job_service.close()
             await compute_session_service.close()
             if redis_streams is not None:
@@ -286,7 +323,9 @@ def create_app(
     app.state.repository = repository
     app.state.job_service = job_service
     app.state.agent_capability_service = agent_capability_service
-    app.include_router(create_agent_router(agent_capability_service))
+    app.state.agent_repository = agent_repository
+    app.state.agent_runtime = agent_runtime
+    app.include_router(create_agent_router(agent_capability_service, agent_runtime))
     app.include_router(
         create_compute_router(inventory_service, compute_session_service, capability_service)
     )

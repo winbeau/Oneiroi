@@ -110,6 +110,447 @@
         "title": "AgentCapabilitiesResponse",
         "type": "object"
       },
+      "AgentMessageContent": {
+        "additionalProperties": false,
+        "properties": {
+          "draftProposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rationale": {
+            "items": {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Rationale",
+            "type": "array"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Text",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "maxLength": 1000,
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "AgentMessageContent",
+        "type": "object"
+      },
+      "AgentMessageResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "completedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedat"
+          },
+          "content": {
+            "$ref": "#/components/schemas/AgentMessageContent"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "providerItemId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provideritemid"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AgentMessageRole"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runid"
+          },
+          "sequence": {
+            "minimum": 1.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentMessageStatus"
+          },
+          "threadId": {
+            "title": "Threadid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "threadId",
+          "sequence",
+          "role",
+          "content",
+          "status",
+          "createdAt"
+        ],
+        "title": "AgentMessageResponse",
+        "type": "object"
+      },
+      "AgentMessageRole": {
+        "enum": [
+          "user",
+          "assistant",
+          "tool",
+          "system_summary"
+        ],
+        "title": "AgentMessageRole",
+        "type": "string"
+      },
+      "AgentMessageStatus": {
+        "enum": [
+          "streaming",
+          "completed",
+          "failed"
+        ],
+        "title": "AgentMessageStatus",
+        "type": "string"
+      },
+      "AgentRunCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "assetIds": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Assetids",
+            "type": "array"
+          },
+          "conversationId": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "draftSnapshot": {
+            "$ref": "#/components/schemas/GenerationDraft"
+          },
+          "message": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "mode": {
+            "default": "assist",
+            "enum": [
+              "assist",
+              "image-analysis",
+              "storyboard"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversationId",
+          "message",
+          "draftSnapshot"
+        ],
+        "title": "AgentRunCreate",
+        "type": "object"
+      },
+      "AgentRunResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errormessage"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inputSnapshot": {
+            "additionalProperties": true,
+            "title": "Inputsnapshot",
+            "type": "object"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "outputMessageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputmessageid"
+          },
+          "promptVersion": {
+            "title": "Promptversion",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "providerResponseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providerresponseid"
+          },
+          "reasoningEffort": {
+            "title": "Reasoningeffort",
+            "type": "string"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentRunStatus"
+          },
+          "threadId": {
+            "title": "Threadid",
+            "type": "string"
+          },
+          "toolsetVersion": {
+            "title": "Toolsetversion",
+            "type": "string"
+          },
+          "transport": {
+            "enum": [
+              "sse",
+              "websocket"
+            ],
+            "title": "Transport",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AgentUsage"
+          }
+        },
+        "required": [
+          "id",
+          "threadId",
+          "conversationId",
+          "status",
+          "model",
+          "provider",
+          "transport",
+          "reasoningEffort",
+          "promptVersion",
+          "toolsetVersion",
+          "inputSnapshot",
+          "createdAt"
+        ],
+        "title": "AgentRunResponse",
+        "type": "object"
+      },
+      "AgentRunStatus": {
+        "enum": [
+          "queued",
+          "streaming",
+          "waiting_approval",
+          "executing_tool",
+          "cancelling",
+          "cancelled",
+          "completed",
+          "failed",
+          "expired",
+          "recovering"
+        ],
+        "title": "AgentRunStatus",
+        "type": "string"
+      },
+      "AgentThreadResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "promptVersion": {
+            "title": "Promptversion",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentThreadStatus"
+          },
+          "summaryCursor": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Summarycursor",
+            "type": "integer"
+          },
+          "summaryText": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summarytext"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "status",
+          "promptVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "AgentThreadResponse",
+        "type": "object"
+      },
+      "AgentThreadStatus": {
+        "enum": [
+          "active",
+          "archived"
+        ],
+        "title": "AgentThreadStatus",
+        "type": "string"
+      },
+      "AgentUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "inputTokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Inputtokens",
+            "type": "integer"
+          },
+          "outputTokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Outputtokens",
+            "type": "integer"
+          },
+          "providerRequests": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Providerrequests",
+            "type": "integer"
+          },
+          "totalTokens": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Totaltokens",
+            "type": "integer"
+          }
+        },
+        "title": "AgentUsage",
+        "type": "object"
+      },
       "AssetResponse": {
         "additionalProperties": false,
         "properties": {
@@ -562,6 +1003,146 @@
           "updatedAt"
         ],
         "title": "ConversationResponse",
+        "type": "object"
+      },
+      "DraftProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "duration": {
+            "anyOf": [
+              {
+                "enum": [
+                  5,
+                  8,
+                  10
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "firstFrameAssetId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firstframeassetid"
+          },
+          "firstStrength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firststrength"
+          },
+          "lastFrameAssetId": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastframeassetid"
+          },
+          "lastStrength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Laststrength"
+          },
+          "negativePrompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negativeprompt"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "enum": [
+                  "16:9",
+                  "9:16",
+                  "1:1"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratio"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "enum": [
+                  "720p",
+                  "1080p"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "title": "DraftProposal",
         "type": "object"
       },
       "GenerationDraft": {
@@ -1337,6 +1918,324 @@
         ]
       }
     },
+    "/v1/agent/runs": {
+      "post": {
+        "operationId": "create_run_v1_agent_runs_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Run",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/runs/{run_id}": {
+      "get": {
+        "operationId": "get_run_v1_agent_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Run",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "cancel_run_v1_agent_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Run",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/runs/{run_id}/events": {
+      "get": {
+        "operationId": "run_events_v1_agent_runs__run_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Events",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/threads/{thread_id}/messages": {
+      "get": {
+        "operationId": "list_messages_v1_agent_threads__thread_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentMessageResponse"
+                  },
+                  "title": "Response List Messages V1 Agent Threads  Thread Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Messages",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
     "/v1/assets": {
       "get": {
         "operationId": "list_assets_v1_assets_get",
@@ -2015,6 +2914,58 @@
         "summary": "Put Conversation",
         "tags": [
           "conversations"
+        ]
+      }
+    },
+    "/v1/conversations/{conversation_id}/agent/thread": {
+      "get": {
+        "operationId": "get_thread_v1_conversations__conversation_id__agent_thread_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentThreadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Thread",
+        "tags": [
+          "agent"
         ]
       }
     },

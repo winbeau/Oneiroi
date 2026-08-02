@@ -27,8 +27,8 @@ The independent worktree started clean on `gpt-agent` at the required starting c
 | Stage | State | Implementation commit | External blocker |
 |---|---|---|---|
 | A. Provider and configuration | implemented; real canary blocked | `340118be27cd3c4ec71b4bf73dae9fef994ed226` | rotated credential has not been injected into restricted Gateway runtime; real image model/return mode, rate-limit format, and WebSocket support are therefore not claimed |
-| B. Minimal Agent API and prompt assistant | pending | — | none for fake-provider implementation |
-| C. Durable Agent runtime | pending | — | PostgreSQL integration requires the repository test database when migration tests run |
+| B. Minimal Agent API and prompt assistant | implemented; commit pending | pending | real provider canary remains blocked; deterministic fake-provider implementation is complete |
+| C. Durable Agent runtime | implemented; commit pending | pending | production migration requires later release authorization; local PostgreSQL migration and persistence checks pass |
 | D. Controlled tools and approval | pending | — | none for fake service tests |
 | E. Image generation and assetization | pending | — | real provider image capability remains blocked; fake/base64/file-ID/URL paths can proceed |
 | F. Frontend Agent experience and Job orchestration | pending | — | real video E2E requires a gpu-server Runner; fake Job orchestration can proceed |
@@ -68,6 +68,55 @@ Quality evidence after Stage A:
 | `git diff --check` and cached diff check | passed |
 | staged credential-pattern scan | passed |
 | real provider network calls in pytest | 0 |
+
+## Stages B/C evidence
+
+Implemented:
+
+- canonical Agent thread, message, run, event, tool-call, approval, usage, status, and editable draft-proposal contracts;
+- owner-bound minimal Agent API for idempotent run creation, run snapshot, cancellation, thread lookup, bounded messages, and durable SSE replay;
+- a versioned system prompt that requests user-visible conclusions and proposals without exposing chain-of-thought;
+- structured draft proposal validation; provider output never mutates the browser draft or starts a long-running Job without later explicit user action;
+- `0002_agent_runtime` PostgreSQL migration and matching SQLAlchemy models;
+- in-memory and SQL Agent repository implementations behind the same protocol;
+- PostgreSQL-level partial unique active-run index, plus runtime enforcement, limiting each owner to one non-terminal run;
+- row-lock and expected-state compare-and-swap for transitions, streamed event append, and completion so stale workers cannot overwrite cancellation or terminal state;
+- composite database constraints binding owner, Conversation, thread, run, message, event, tool call, and approval relationships;
+- durable event IDs, bounded 200-event replay pages, `Last-Event-ID`, terminal replay completion, and heartbeats;
+- cancellation semantics that win over concurrent final delta, proposal, or completion writes;
+- deterministic restart recovery: `cancelling` becomes `cancelled`; all other incomplete states, including pre-Stage-D `waiting_approval`, fail with `AGENT_RECOVERY_REQUIRED` and release the owner slot;
+- bounded provider source events through `ONEIROI_GATEWAY_AGENT_MAX_EVENTS_PER_RUN=1000`, bounded text, bounded message queries, and owner-checked input Asset metadata;
+- explicit Pi BFF route allowlist and reduced Agent JSON body limit; no wildcard Agent proxy;
+- OpenAPI and generated TypeScript DTO updates;
+- runtime, persistence, SSE, recovery, safety, validation, and rollback documentation in `docs/agent-runtime.md`.
+
+Quality evidence after Stages B/C implementation, before the stage commit:
+
+| Check | Result |
+|---|---|
+| `uv run ruff check .` | passed |
+| targeted Agent repository/runtime/settings tests | 23 passed |
+| `uv run pytest` | 126 passed, 8 skipped, 1 existing Starlette deprecation warning |
+| PostgreSQL migration `downgrade 0001_dynamic_backend` then `upgrade head` | passed |
+| loopback PostgreSQL integration, including automated migration roundtrip | 5 passed |
+| `pnpm check` | passed |
+| OpenAPI generation | deterministic generated files updated; clean `pnpm check:api` rerun pending after the stage commit establishes the new baseline |
+| Playwright | 13 passed, 1 skipped |
+| `git diff --check` and high-entropy credential scan | passed |
+
+Security and scope notes:
+
+- tests use the deterministic fake provider and make no real provider network call;
+- no provider key, base URL override, raw provider event, storage path, or chain-of-thought enters browser contracts;
+- no write/costly tool executes in Stages B/C; Stage D approval tables are schema-only reservations;
+- no Authentik, Cloudflare, Pi/H100 production service, or gpu-server Runner was changed;
+- Pi/H100 production remains frozen at `fa7c28cc98edf423e2be8762ad13b55f606389eb`.
+
+Rollback:
+
+1. Set `ONEIROI_GATEWAY_AGENT_ENABLED=false`; new runs fail closed while existing non-Agent APIs remain available.
+2. Prefer a code-only rollback that leaves Agent tables intact.
+3. If Agent data is intentionally disposable, `alembic downgrade 0001_dynamic_backend` drops all Agent tables; this destructive step is not an automatic production rollback.
 
 Provider capability result:
 

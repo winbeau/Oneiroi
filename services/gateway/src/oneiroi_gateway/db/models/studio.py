@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,6 +21,7 @@ from oneiroi_gateway.db.models.base import Base
 
 class ConversationModel(Base):
     __tablename__ = "conversations"
+    __table_args__ = (UniqueConstraint("id", "owner_id", name="uq_conversations_id_owner"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(String(128), index=True)

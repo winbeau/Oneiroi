@@ -30,6 +30,8 @@ PASSTHROUGH_RESPONSE_HEADERS = {
     "content-type",
     "etag",
     "last-modified",
+    "retry-after",
+    "x-request-id",
 }
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -117,10 +119,12 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
         request: Request,
         path: str,
         header_user: str | None,
+        *,
+        maximum_bytes: int | None = None,
     ) -> Response:
         enforce_csrf(request)
         resolved = await identity(request, header_user)
-        body = await _bounded_request_body(request, settings.max_upload_bytes)
+        body = await _bounded_request_body(request, maximum_bytes or settings.max_upload_bytes)
         headers = _request_headers(request, resolved)
         try:
             upstream = await gateway.request(
@@ -183,7 +187,7 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
         except (httpx.ConnectError, httpx.TimeoutException):
             return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
         response_headers = _response_headers(upstream_headers)
-        response_headers.update({"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        response_headers.update({"cache-control": "no-cache", "x-accel-buffering": "no"})
         return StreamingResponse(
             body,
             status_code=upstream_status,
@@ -205,6 +209,70 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
         user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
     ) -> Response:
         return await forward(request, f"/v1/conversations/{conversation_id}", user)
+
+    @router.get("/v1/agent/capabilities")
+    async def agent_capabilities(
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(request, "/v1/agent/capabilities", user)
+
+    @router.get("/v1/conversations/{conversation_id}/agent/thread")
+    async def agent_thread(
+        conversation_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(request, f"/v1/conversations/{conversation_id}/agent/thread", user)
+
+    @router.get("/v1/agent/threads/{thread_id}/messages")
+    async def agent_messages(
+        thread_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(request, f"/v1/agent/threads/{thread_id}/messages", user)
+
+    @router.post("/v1/agent/runs")
+    async def create_agent_run(
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(
+            request,
+            "/v1/agent/runs",
+            user,
+            maximum_bytes=settings.max_agent_json_bytes,
+        )
+
+    @router.get("/v1/agent/runs/{run_id}")
+    async def agent_run(
+        run_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(request, f"/v1/agent/runs/{run_id}", user)
+
+    @router.get("/v1/agent/runs/{run_id}/events")
+    async def agent_run_events(
+        run_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward_events(request, f"/v1/agent/runs/{run_id}/events", user)
+
+    @router.post("/v1/agent/runs/{run_id}/cancel")
+    async def cancel_agent_run(
+        run_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(
+            request,
+            f"/v1/agent/runs/{run_id}/cancel",
+            user,
+            maximum_bytes=settings.max_agent_json_bytes,
+        )
 
     @router.get("/v1/compute/gpus")
     async def compute_gpus(
@@ -382,7 +450,5 @@ def _request_headers(request: Request, identity: ResolvedIdentity) -> dict[str, 
 
 def _response_headers(headers: httpx.Headers | dict[str, str]) -> dict[str, str]:
     return {
-        key: value
-        for key, value in headers.items()
-        if key.lower() in PASSTHROUGH_RESPONSE_HEADERS
+        key: value for key, value in headers.items() if key.lower() in PASSTHROUGH_RESPONSE_HEADERS
     }
