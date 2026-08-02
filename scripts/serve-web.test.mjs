@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +37,29 @@ async function stop(child) {
   if (child.exitCode !== null) return;
   child.kill("SIGTERM");
   await new Promise((resolve) => child.once("exit", resolve));
+}
+
+async function postWithContinue(url, contentType, body) {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": contentType,
+        "Content-Length": body.length,
+        Expect: "100-continue",
+      },
+    });
+    request.once("continue", () => request.end(body));
+    request.once("error", reject);
+    request.once("response", (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.once("end", () =>
+        resolve({ status: response.statusCode, body: Buffer.concat(chunks) }),
+      );
+    });
+    request.flushHeaders();
+  });
 }
 
 test("static origin proxies bounded multipart uploads and streams range responses", async () => {
@@ -99,6 +122,18 @@ test("static origin proxies bounded multipart uploads and streams range response
     assert.match(uploadBody.contentType, /^multipart\/form-data; boundary=/);
     assert.match(uploadBody.body, /filename="head.png"/);
     assert.match(uploadBody.body, /first-frame-bytes/);
+
+    const boundary = "oneiroi-continue-boundary";
+    const continueBody = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="continue.png"\r\nContent-Type: image/png\r\n\r\ncontinued-frame-bytes\r\n--${boundary}--\r\n`,
+    );
+    const continued = await postWithContinue(
+      `${baseUrl}/v1/uploads/images`,
+      `multipart/form-data; boundary=${boundary}`,
+      continueBody,
+    );
+    assert.equal(continued.status, 201);
+    assert.match(continued.body.toString("utf8"), /continued-frame-bytes/);
 
     const oversized = await fetch(`${baseUrl}/v1/conversations`, {
       method: "POST",

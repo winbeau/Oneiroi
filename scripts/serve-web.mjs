@@ -52,6 +52,7 @@ function copyRequestHeaders(request) {
     if (
       !HOP_BY_HOP_HEADERS.has(normalized) &&
       normalized !== "content-length" &&
+      normalized !== "expect" &&
       normalized !== "host" &&
       value !== undefined
     ) {
