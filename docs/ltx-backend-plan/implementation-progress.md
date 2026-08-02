@@ -254,3 +254,17 @@ H100 真实验证（2026-07-31）：
 - 完整证据见 `docs/ltx-backend-plan/m9-first-last-gpu-server-e2e.md`。
 
 未解决阻塞：无。
+
+## M10：192.168.3.250 内网完整原型
+
+2026-08-02 暂停公网 video Tunnel，将 Pi static origin 暴露到 `192.168.3.250:4173`，生产 H100 Gateway 切换到常驻 gpu-server：
+
+- LAN 浏览器同源链路完成 conversation、素材、GPU session、首尾帧 Fast I2V、SSE、MP4 Range、history 和 release；
+- 修复 static origin 对大 multipart 与 `Expect: 100-continue` 的 502，增加有界 body、413、multipart 和 Range 回归；
+- 真实取消从 `cancel_requested` 到 `cancelled`，释放后 GPU 0 和 managed PID registry 均为 0；
+- Chromium 验证首页、灵感、素材、创建页、UI 热加载/释放，无 console error；
+- 完整证据与公网恢复顺序见 `docs/ltx-backend-plan/m10-lan-prototype.md`。
+
+当前入口：`http://192.168.3.250:4173`。公网 Tunnel 保持 disabled/inactive。
+
+未解决阻塞：无。
