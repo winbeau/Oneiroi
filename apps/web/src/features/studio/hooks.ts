@@ -3,7 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import type {
   Conversation,
@@ -18,6 +18,40 @@ const keys = {
   jobs: ["jobs"] as const,
   assets: ["assets"] as const,
 };
+
+const terminalJobStages = new Set(["succeeded", "failed", "cancelled"]);
+const jobStageOrder = {
+  draft: 0,
+  uploaded: 1,
+  queued: 2,
+  assigned: 3,
+  loading_model: 4,
+  preparing: 5,
+  generating: 6,
+  encoding: 7,
+  cancel_requested: 8,
+  succeeded: 9,
+  failed: 9,
+  cancelled: 9,
+} satisfies Record<StudioJob["stage"], number>;
+
+function mergeJobEvent(current: StudioJob, next: StudioJob): StudioJob {
+  if (next.attempt < current.attempt) return current;
+  if (next.attempt > current.attempt) return next;
+  if (terminalJobStages.has(current.stage) && !terminalJobStages.has(next.stage)) return current;
+  if (jobStageOrder[next.stage] < jobStageOrder[current.stage]) return current;
+  if (Date.parse(next.updatedAt) < Date.parse(current.updatedAt)) return current;
+  return { ...next, progress: Math.max(current.progress, next.progress) };
+}
+
+function mergeJobList(current: StudioJob[] | undefined, next: StudioJob[]): StudioJob[] {
+  if (!current) return next;
+  const currentById = new Map(current.map((job) => [job.id, job]));
+  return next.map((job) => {
+    const previous = currentById.get(job.id);
+    return previous ? mergeJobEvent(previous, job) : job;
+  });
+}
 
 export function useConversations() {
   return useQuery({
@@ -45,9 +79,14 @@ export function useCreateConversation() {
 }
 
 export function useJobs() {
-  return useQuery({
+  return useQuery<StudioJob[]>({
     queryKey: keys.jobs,
     queryFn: () => apiRequest<StudioJob[]>("/v1/jobs"),
+    structuralSharing: (current, next) =>
+      mergeJobList(
+        Array.isArray(current) ? (current as StudioJob[]) : undefined,
+        next as StudioJob[],
+      ),
     refetchInterval: (query) =>
       (query.state.data ?? []).some(
         (job) => !["succeeded", "failed", "cancelled"].includes(job.stage),
@@ -59,24 +98,42 @@ export function useJobs() {
 
 export function useJobEvents(jobs: StudioJob[]) {
   const queryClient = useQueryClient();
+  const sources = useRef(new Map<string, EventSource>());
+  const activeJobIds = jobs
+    .filter((job) => !terminalJobStages.has(job.stage))
+    .map((job) => job.id)
+    .sort();
+  const activeJobKey = activeJobIds.join("\u0000");
 
   useEffect(() => {
     if (demoMode) return;
-    const active = jobs.filter(
-      (job) => !["succeeded", "failed", "cancelled"].includes(job.stage),
-    );
-    const sources = active.map((job) => {
-      const source = new EventSource(apiUrl(`/v1/jobs/${job.id}/events`));
+    const active = new Set(activeJobKey ? activeJobKey.split("\u0000") : []);
+    for (const [jobId, source] of sources.current) {
+      if (!active.has(jobId)) {
+        source.close();
+        sources.current.delete(jobId);
+      }
+    }
+    for (const jobId of active) {
+      if (sources.current.has(jobId)) continue;
+      const source = new EventSource(apiUrl(`/v1/jobs/${jobId}/events`));
+      sources.current.set(jobId, source);
       const update = (event: Event) => {
         const next = JSON.parse((event as MessageEvent<string>).data) as StudioJob;
+        let accepted = next;
         queryClient.setQueryData<StudioJob[]>(keys.jobs, (items = []) =>
           items.some((item) => item.id === next.id)
-            ? items.map((item) => (item.id === next.id ? next : item))
+            ? items.map((item) => {
+                if (item.id !== next.id) return item;
+                accepted = mergeJobEvent(item, next);
+                return accepted;
+              })
             : [next, ...items],
         );
-        if (["succeeded", "failed", "cancelled"].includes(next.stage)) {
+        if (terminalJobStages.has(accepted.stage)) {
           void queryClient.invalidateQueries({ queryKey: keys.assets });
           source.close();
+          sources.current.delete(jobId);
         }
       };
       for (const eventName of [
@@ -90,13 +147,18 @@ export function useJobEvents(jobs: StudioJob[]) {
         source.addEventListener(eventName, update);
       }
       source.addEventListener("error", () => {
-        source.close();
         void queryClient.invalidateQueries({ queryKey: keys.jobs });
       });
-      return source;
-    });
-    return () => sources.forEach((source) => source.close());
-  }, [jobs, queryClient]);
+    }
+  }, [activeJobKey, queryClient]);
+
+  useEffect(() => {
+    const subscriptions = sources.current;
+    return () => {
+      for (const source of subscriptions.values()) source.close();
+      subscriptions.clear();
+    };
+  }, []);
 }
 
 export function useCreateJob() {
@@ -200,6 +262,6 @@ function updateJob(
   job: StudioJob,
 ) {
   queryClient.setQueryData<StudioJob[]>(keys.jobs, (items = []) =>
-    items.map((item) => (item.id === job.id ? job : item)),
+    items.map((item) => (item.id === job.id ? mergeJobEvent(item, job) : item)),
   );
 }

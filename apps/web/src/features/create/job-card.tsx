@@ -23,7 +23,7 @@ const stageMeta: Record<
   uploaded: { label: "已上传", description: "参考素材已进入任务目录", tone: "active" },
   queued: { label: "排队中", description: "等待 ready GPU slot", tone: "active" },
   assigned: { label: "已分配", description: "任务已绑定定向 GPU slot", tone: "active" },
-  loading_model: { label: "恢复模型", description: "正在恢复匹配的 PipelineSpec", tone: "active" },
+  loading_model: { label: "准备中", description: "正在确认可用的生成环境", tone: "active" },
   preparing: { label: "准备中", description: "正在处理素材和编码 Prompt", tone: "active" },
   generating: { label: "生成中", description: "正在执行视频扩散采样", tone: "active" },
   encoding: { label: "编码中", description: "正在封装真实 MP4", tone: "active" },
@@ -47,6 +47,7 @@ export function JobCard({ job }: { job: StudioJob }) {
   const meta = stageMeta[job.stage];
   const isRunning = !["succeeded", "failed", "cancelled"].includes(job.stage);
   const quality = job.draft.profile === "hq" ? "高质量" : "快速";
+  const progressLabel = job.progress > 0 ? `${job.progress}%` : "正在准备";
 
   const reuse = () => {
     updateDraft({
@@ -100,7 +101,7 @@ export function JobCard({ job }: { job: StudioJob }) {
             <div className="relative grid min-h-[220px] place-items-center rounded-[var(--radius-lg)] bg-[var(--color-preview)] text-white">
               <div className="text-center">
                 <p className="text-sm font-medium">{meta.description}</p>
-                <p className="mt-2 font-mono text-xs">{job.progress}%</p>
+                <p className="mt-2 font-mono text-xs">{progressLabel}</p>
               </div>
             </div>
           )}

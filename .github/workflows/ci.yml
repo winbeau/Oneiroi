@@ -22,6 +22,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm test:origin
+      - run: pnpm test:deploy
 
   backend:
     runs-on: ubuntu-latest

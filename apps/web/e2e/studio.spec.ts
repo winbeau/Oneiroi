@@ -4,7 +4,10 @@ type BackendOptions = {
   gpuCount?: number;
   failRequests?: boolean;
   emitComputeReadyEvent?: boolean;
+  emitLoadingModelJobEvent?: boolean;
+  replayPriorAttemptTerminalEvent?: boolean;
   onComputeEventsRequest?: () => void;
+  onJobEventsRequest?: () => void;
 };
 
 async function mockBackend(page: Page, options: BackendOptions = {}) {
@@ -165,12 +168,53 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
         draft: payload.draft,
         profileId: "ltx23-distilled-fast-v1",
         gpu: { id: "GPU-e2e-0", physicalIndex: 0 },
-        attempt: 1,
+        attempt: options.replayPriorAttemptTerminalEvent ? 2 : 1,
       };
       jobs = [job];
       return json(job, 202);
     }
     if (path === "/v1/jobs/job-e2e/events") {
+      options.onJobEventsRequest?.();
+      if (options.replayPriorAttemptTerminalEvent) {
+        const current = {
+          ...jobs[0],
+          updatedAt: new Date(Date.now() + 1_000).toISOString(),
+          stage: "generating",
+          progress: 70,
+          phase: "diffusion",
+          currentStep: 5,
+          totalSteps: 8,
+        };
+        jobs = [current];
+        const prior = {
+          ...current,
+          attempt: 1,
+          updatedAt: new Date(Date.now() - 1_000).toISOString(),
+          stage: "failed",
+          progress: 20,
+          phase: "failed",
+        };
+        return route.fulfill({
+          status: 200,
+          contentType: "text/event-stream",
+          body: `id: 1\nevent: job.failed\ndata: ${JSON.stringify(prior)}\n\nid: 2\nevent: job.updated\ndata: ${JSON.stringify(current)}\n\n`,
+        });
+      }
+      if (options.emitLoadingModelJobEvent) {
+        const loading = {
+          ...jobs[0],
+          updatedAt: new Date().toISOString(),
+          stage: "loading_model",
+          progress: 0,
+          phase: "model_loading",
+        };
+        jobs = [loading];
+        return route.fulfill({
+          status: 200,
+          contentType: "text/event-stream",
+          body: `id: 1\nevent: job.updated\ndata: ${JSON.stringify(loading)}\n\n`,
+        });
+      }
       const succeeded = {
         ...jobs[0],
         stage: "succeeded",
@@ -259,6 +303,39 @@ test("compute SSE does not reconnect when a snapshot updates", async ({ page }) 
   await expect(page.getByText(/1 张 H100/)).toBeVisible();
   await page.waitForTimeout(500);
   expect(eventRequests).toBe(1);
+});
+
+test("job SSE stays subscribed and hides technical zero-progress recovery", async ({ page }) => {
+  let eventRequests = 0;
+  await mockBackend(page, {
+    gpuCount: 1,
+    emitLoadingModelJobEvent: true,
+    onJobEventsRequest: () => {
+      eventRequests += 1;
+    },
+  });
+  await page.goto("/create");
+  await page.getByRole("button", { name: "热加载" }).click();
+  await page.getByRole("button", { name: "开始热加载" }).click();
+  await page.getByRole("button", { name: "生成", exact: true }).click();
+
+  await expect(page.getByText("正在确认可用的生成环境").first()).toBeVisible();
+  await expect(page.getByText(/PipelineSpec/)).toHaveCount(0);
+  await expect(page.getByText("0%", { exact: true })).toHaveCount(0);
+  await page.waitForTimeout(500);
+  expect(eventRequests).toBe(1);
+});
+
+test("old terminal events do not close a retried job stream", async ({ page }) => {
+  await mockBackend(page, { gpuCount: 1, replayPriorAttemptTerminalEvent: true });
+  await page.goto("/create");
+  await page.getByRole("button", { name: "热加载" }).click();
+  await page.getByRole("button", { name: "开始热加载" }).click();
+  await page.getByRole("button", { name: "生成", exact: true }).click();
+
+  await expect(page.getByText("生成中", { exact: true })).toBeVisible();
+  await expect(page.getByText("70%", { exact: true })).toBeVisible();
+  await expect(page.getByText("失败", { exact: true })).toHaveCount(0);
 });
 
 test("release returns compute control to the empty state", async ({ page }) => {

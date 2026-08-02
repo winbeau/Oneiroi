@@ -48,6 +48,16 @@ pnpm dev:host
 # http://<本机内网IP>:5173
 ```
 
+Pi5 内网一键部署使用完整 edge 脚本，而不是直接运行 Web foreground 命令：
+
+```bash
+cd ~/oneiroi-studio
+scripts/deploy-pi.sh lan --host 192.168.3.250 \
+  --gateway-url http://10.30.176.95:18000
+```
+
+脚本会先停止并禁用 `cloudflared-video.service`，再 fast-forward、frozen install、构建 immutable Web、备份现有 env/unit、将 BFF 切到 development identity、安装并重启 BFF/Web user services，最后验证 loopback BFF 和 LAN origin health。`bff.env` 必须预先包含 Pi→H100 service assertion 私钥配置；脚本只更新模式、Gateway、Origin 和 timeout，不创建或打印凭据。重复部署时可省略 `--gateway-url` 以保留当前值。
+
 树莓派安全生产部署：
 
 1. Pi BFF 使用 `Cf-Access-Jwt-Assertion` 验证 Cloudflare Access JWT，并把 `(issuer, subject)` 映射成稳定 owner；不要设置或恢复 `ONEIROI_API_PROXY_USER`。
