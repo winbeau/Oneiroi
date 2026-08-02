@@ -18,7 +18,7 @@ IMAGE="${ONEIROI_LAN_DNS_IMAGE:-local/oneiroi-dnsmasq:$DNSMASQ_VERSION}"
 install -D -m 0755 "$DNSMASQ_BIN" "$BUILD_DIR/rootfs$DNSMASQ_BIN"
 
 ldd "$DNSMASQ_BIN" |
-    awk '{ for (index = 1; index <= NF; index += 1) if ($index ~ /^\//) { print $index; break } }' |
+    awk '{ for (field = 1; field <= NF; field += 1) if ($field ~ /^\//) { print $field; break } }' |
     sort -u |
     while IFS= read -r library; do
         cp --parents -L "$library" "$BUILD_DIR/rootfs"

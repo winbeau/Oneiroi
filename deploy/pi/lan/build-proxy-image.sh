@@ -23,7 +23,7 @@ install -m 0755 "$SCRIPT_DIR/lan-proxy.py" "$BUILD_DIR/rootfs/lan-proxy.py"
 {
     ldd "$PYTHON_BIN"
     find "$PYTHON_STDLIB" -type f -name '*.so' -exec ldd {} \; 2>/dev/null || true
-} | awk '{ for (index = 1; index <= NF; index += 1) if ($index ~ /^\//) { print $index; break } }' |
+} | awk '{ for (field = 1; field <= NF; field += 1) if ($field ~ /^\//) { print $field; break } }' |
     sort -u |
     while IFS= read -r library; do
         cp --parents -L "$library" "$BUILD_DIR/rootfs"
