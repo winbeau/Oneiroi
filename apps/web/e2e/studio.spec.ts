@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 type BackendOptions = {
   gpuCount?: number;
+  agentEnabled?: boolean;
   failRequests?: boolean;
   emitComputeReadyEvent?: boolean;
   emitLoadingModelJobEvent?: boolean;
@@ -16,6 +17,10 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
   let conversations: Array<Record<string, unknown>> = [];
   let jobs: Array<Record<string, unknown>> = [];
   let assets: Array<Record<string, unknown>> = [];
+  let agentRun: Record<string, unknown> | null = null;
+  let agentThread: Record<string, unknown> | null = null;
+  let agentMessages: Array<Record<string, unknown>> = [];
+  let agentApproved = false;
 
   await page.route("**/v1/**", async (route) => {
     if (options.failRequests) {
@@ -44,6 +49,225 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
       };
       conversations = [conversation];
       return json(conversation, 201);
+    }
+    if (path === "/v1/agent/capabilities" && method === "GET") {
+      if (!options.agentEnabled) return json({ detail: "not found" }, 404);
+      return json({
+        enabled: true,
+        configured: true,
+        available: true,
+        reasonCode: null,
+        provider: "openai-responses",
+        model: "gpt-5.6-sol",
+        text: true,
+        streaming: true,
+        functionTools: true,
+        imageInput: true,
+        imageGeneration: true,
+        usage: true,
+        transports: ["sse"],
+        websocketDeclared: true,
+        websocketVerified: false,
+        toolsEnabled: true,
+        tools: [
+          { name: "generate_reference_image", risk: "costly", requiresApproval: true },
+        ],
+        maxTurns: 8,
+        maxToolCalls: 12,
+        maxApprovals: 3,
+      });
+    }
+    if (path.match(/^\/v1\/conversations\/[^/]+\/agent\/thread$/) && method === "GET") {
+      return agentThread ? json(agentThread) : json({ detail: "not found" }, 404);
+    }
+    if (path.match(/^\/v1\/agent\/threads\/[^/]+\/messages$/) && method === "GET") {
+      return json(agentMessages);
+    }
+    if (path === "/v1/agent/runs" && method === "POST") {
+      const payload = request.postDataJSON() as {
+        conversationId: string;
+        message: string;
+      };
+      const createdAt = new Date().toISOString();
+      agentThread = {
+        id: "agent-thread-e2e",
+        conversationId: payload.conversationId,
+        status: "active",
+        summaryCursor: 0,
+        promptVersion: "oneiroi-agent-v1",
+        createdAt,
+        updatedAt: createdAt,
+      };
+      agentRun = {
+        id: "agent-run-e2e",
+        threadId: "agent-thread-e2e",
+        conversationId: payload.conversationId,
+        status: "queued",
+        model: "gpt-5.6-sol",
+        provider: "openai-responses",
+        transport: "sse",
+        reasoningEffort: "xhigh",
+        promptVersion: "oneiroi-agent-v1",
+        toolsetVersion: "oneiroi-tools-v1",
+        inputSnapshot: {},
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, providerRequests: 0 },
+        createdAt,
+      };
+      agentMessages = [
+        {
+          id: "agent-message-user-e2e",
+          threadId: "agent-thread-e2e",
+          runId: "agent-run-e2e",
+          sequence: 1,
+          role: "user",
+          content: { text: payload.message, rationale: [], warnings: [] },
+          status: "completed",
+          createdAt,
+          completedAt: createdAt,
+        },
+      ];
+      return json(agentRun, 202);
+    }
+    if (path === "/v1/agent/runs/agent-run-e2e/events" && method === "GET") {
+      const envelope = (sequence: number, data: Record<string, unknown>) =>
+        JSON.stringify({
+          runId: "agent-run-e2e",
+          threadId: "agent-thread-e2e",
+          sequence,
+          data,
+        });
+      const toolCall = {
+        id: "agent-tool-e2e",
+        runId: "agent-run-e2e",
+        toolName: "generate_reference_image",
+        toolVersion: "1",
+        risk: "costly",
+        arguments: {
+          prompt: "A moonlit city",
+          purpose: "first-frame",
+          ratio: "16:9",
+          count: 1,
+          referenceAssetIds: [],
+        },
+        argumentsHash: "e2e-hash",
+        status: agentApproved ? "succeeded" : "waiting_approval",
+        createdAt: new Date().toISOString(),
+        ...(agentApproved
+          ? {
+              result: {
+                assets: [
+                  {
+                    id: "asset-agent-e2e",
+                    type: "image",
+                    title: "Agent 首帧参考图",
+                    mediaType: "image/png",
+                    width: 1280,
+                    height: 720,
+                  },
+                ],
+                partial: false,
+                errorCode: null,
+              },
+              finishedAt: new Date().toISOString(),
+            }
+          : {}),
+      };
+      if (!agentApproved) {
+        return route.fulfill({
+          status: 200,
+          contentType: "text/event-stream",
+          body: [
+            `id: 1\nevent: agent.run.started\ndata: ${envelope(1, { status: "streaming" })}\n\n`,
+            `id: 2\nevent: agent.approval.required\ndata: ${envelope(2, {
+              toolCall,
+              approval: {
+                id: "agent-approval-e2e",
+                runId: "agent-run-e2e",
+                toolCallId: "agent-tool-e2e",
+                argumentsHash: "e2e-hash",
+                status: "pending",
+                estimatedCost: "1 image credit",
+                expiresAt: new Date(Date.now() + 600_000).toISOString(),
+              },
+            })}\n\n`,
+          ].join(""),
+        });
+      }
+      const createdAt = new Date().toISOString();
+      assets = [
+        {
+          id: "asset-agent-e2e",
+          type: "image",
+          title: "Agent 首帧参考图",
+          createdAt,
+          mediaType: "image/png",
+          sizeBytes: 1024,
+          width: 1280,
+          height: 720,
+          previewUrl:
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'%3E%3Crect width='1280' height='720' fill='%236b5f8f'/%3E%3C/svg%3E",
+        },
+      ];
+      agentMessages = [
+        ...agentMessages,
+        {
+          id: "agent-message-assistant-e2e",
+          threadId: "agent-thread-e2e",
+          runId: "agent-run-e2e",
+          sequence: 2,
+          role: "assistant",
+          content: {
+            text: "参考图已保存为候选资产，请明确选择是否应用。",
+            rationale: [],
+            warnings: [],
+          },
+          status: "completed",
+          createdAt,
+          completedAt: createdAt,
+        },
+      ];
+      return route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: [
+          `id: 3\nevent: agent.tool.started\ndata: ${envelope(3, { toolCall: { ...toolCall, status: "running" } })}\n\n`,
+          `id: 4\nevent: agent.tool.completed\ndata: ${envelope(4, { toolCall })}\n\n`,
+          `id: 5\nevent: agent.run.completed\ndata: ${envelope(5, { status: "completed" })}\n\n`,
+        ].join(""),
+      });
+    }
+    if (path === "/v1/agent/tool-calls/agent-tool-e2e/approve" && method === "POST") {
+      agentApproved = true;
+      return json({
+        toolCall: {
+          id: "agent-tool-e2e",
+          runId: "agent-run-e2e",
+          toolName: "generate_reference_image",
+          toolVersion: "1",
+          risk: "costly",
+          arguments: {
+            prompt: "A moonlit city",
+            purpose: "first-frame",
+            ratio: "16:9",
+            count: 1,
+            referenceAssetIds: [],
+          },
+          argumentsHash: "e2e-hash",
+          status: "approved",
+          createdAt: new Date().toISOString(),
+        },
+        approval: {
+          id: "agent-approval-e2e",
+          runId: "agent-run-e2e",
+          toolCallId: "agent-tool-e2e",
+          argumentsHash: "e2e-hash",
+          status: "consumed",
+          expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          decidedAt: new Date().toISOString(),
+          consumedAt: new Date().toISOString(),
+        },
+        run: { ...agentRun, status: "executing_tool" },
+      }, 202);
     }
     if (path === "/v1/jobs" && method === "GET") return json(jobs);
     if (path === "/v1/assets" && method === "GET") return json(assets);
@@ -393,6 +617,27 @@ test("template remains editable in the streamlined creation composer", async ({ 
   await durationInput.fill("15");
   await durationInput.press("Enter");
   await expect(page.getByRole("button", { name: "选择视频生成时长" })).toContainText("15 秒");
+});
+
+test("Agent reference image requires approval and explicit draft application", async ({ page }) => {
+  await mockBackend(page, { agentEnabled: true });
+  await page.goto("/create");
+
+  await page.getByRole("button", { name: "展开 Oneiroi 助理" }).click();
+  await page.getByRole("button", { name: "生成首帧参考图" }).click();
+  await page.getByRole("button", { name: "发送给 Oneiroi 助理" }).click();
+
+  const approval = page.getByRole("group", { name: "Agent 图片生成审批" });
+  await expect(approval.getByText("确认生成参考图片")).toBeVisible();
+  await expect(approval.getByText("首帧", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "上传首帧" })).toBeVisible();
+  await page.getByRole("button", { name: "同意生成" }).click();
+
+  await expect(page.getByText("参考图候选")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "上传首帧" })).toBeVisible();
+  await page.getByRole("button", { name: "设为首帧" }).click();
+  await expect(page.getByRole("button", { name: "更换首帧" })).toBeVisible();
+  await expect(page.getByText("已完成", { exact: true })).toHaveCount(0);
 });
 
 test("mobile workspace sidebar can collapse and reopen", async ({ page }, testInfo) => {

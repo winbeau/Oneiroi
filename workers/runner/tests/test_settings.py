@@ -24,7 +24,7 @@ def test_runner_binds_configured_gpu_uuid(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_production_runner_rejects_root_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setattr(os, "geteuid", lambda: 0, raising=False)
 
     with pytest.raises(RuntimeError, match="non-root"):
         validate_process_identity(RunnerSettings(environment="production"))

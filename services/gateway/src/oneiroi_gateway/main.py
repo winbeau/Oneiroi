@@ -7,6 +7,10 @@ from fastapi.responses import JSONResponse
 from oneiroi_common.api import ServiceHealth
 from oneiroi_common.identity import SERVICE_ASSERTION_HEADER
 from oneiroi_common.jobs import QueueTier
+from oneiroi_gateway.agent.openai_responses import OpenAIResponsesProvider
+from oneiroi_gateway.agent.protocol import AgentProvider
+from oneiroi_gateway.agent.registry import ToolRegistry, builtin_tool_registry
+from oneiroi_gateway.agent.runtime import AgentRuntime
 from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.gpu_server import (
     GpuServerClient,
@@ -17,9 +21,12 @@ from oneiroi_gateway.gpu_server import (
 )
 from oneiroi_gateway.redis.control_streams import RedisDirectedStreams
 from oneiroi_gateway.redis.leases import RedisLeaseStore
+from oneiroi_gateway.repositories.agent import AgentRepository, InMemoryAgentRepository
 from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
+from oneiroi_gateway.repositories.sql_agent import SqlAgentRepository
 from oneiroi_gateway.repositories.sql_studio import SqlStudioRepository
 from oneiroi_gateway.repositories.studio import InMemoryStudioRepository, StudioRepository
+from oneiroi_gateway.routes.agent import create_agent_router
 from oneiroi_gateway.routes.assets import create_asset_router
 from oneiroi_gateway.routes.compute import create_compute_router
 from oneiroi_gateway.routes.conversations import create_conversation_router
@@ -30,6 +37,7 @@ from oneiroi_gateway.service_auth import (
     ServiceAuthConfigurationError,
     ServiceAuthenticationError,
 )
+from oneiroi_gateway.services.agent_capabilities import AgentCapabilityService
 from oneiroi_gateway.services.artifact_service import ArtifactService
 from oneiroi_gateway.services.capabilities import CapabilityService
 from oneiroi_gateway.services.compute_sessions import (
@@ -63,6 +71,13 @@ def create_app(
     inventory_service: GpuInventoryService | None = None,
     compute_session_service: ComputeSessionService | None = None,
     capability_service: CapabilityService | None = None,
+    agent_capability_service: AgentCapabilityService | None = None,
+    agent_repository: AgentRepository | None = None,
+    agent_provider: AgentProvider | None = None,
+    agent_runtime: AgentRuntime | None = None,
+    agent_tool_registry: ToolRegistry | None = None,
+    artifact_service: ArtifactService | None = None,
+    allow_unprobed_agent_provider_for_tests: bool = False,
     repository: StudioRepository | None = None,
     job_dispatcher: JobDispatcher | None = None,
     job_executor: JobExecutor | None = None,
@@ -149,6 +164,12 @@ def create_app(
     capability_service = capability_service or CapabilityService(
         hq_installed=not app_settings.gpu_server_enabled
     )
+    agent_tool_registry = agent_tool_registry or builtin_tool_registry(
+        image_timeout_seconds=app_settings.agent_image_tool_timeout_seconds
+    )
+    agent_capability_service = agent_capability_service or AgentCapabilityService(
+        app_settings, agent_tool_registry
+    )
     database_engine = None
     database_sessions = None
     if repository is None:
@@ -160,10 +181,73 @@ def create_app(
             repository = InMemoryStudioRepository()
     if managed_compute_service and database_sessions is not None:
         compute_session_service.state_repository = SqlComputeStateRepository(database_sessions)
-    artifacts = ArtifactService(
+    if agent_repository is None:
+        agent_repository = (
+            SqlAgentRepository(database_sessions)
+            if database_sessions is not None
+            else InMemoryAgentRepository()
+        )
+    artifacts = artifact_service or ArtifactService(
         repository,
         app_settings.storage_root,
         max_upload_bytes=app_settings.max_upload_bytes,
+        max_image_pixels=app_settings.agent_max_image_pixels,
+        max_image_edge=app_settings.agent_max_image_edge,
+    )
+    agent_provider_injected = agent_provider is not None
+    agent_capabilities = agent_capability_service.get()
+    injected_provider_available = (
+        agent_provider_injected
+        and app_settings.agent_enabled
+        and (agent_capabilities.available or allow_unprobed_agent_provider_for_tests)
+    )
+    if agent_provider_injected and not injected_provider_available:
+        agent_provider = None
+    if agent_provider is None and agent_capabilities.available:
+        assert app_settings.agent_api_key is not None
+        agent_provider = OpenAIResponsesProvider(
+            app_settings.agent_base_url,
+            app_settings.agent_api_key.get_secret_value(),
+            model=app_settings.agent_model,
+            reasoning_effort=app_settings.agent_reasoning_effort,
+            image_model=app_settings.agent_image_model or None,
+            websocket_declared=app_settings.agent_provider_websocket_declared,
+            connect_timeout_seconds=app_settings.agent_connect_timeout_seconds,
+            stream_timeout_seconds=app_settings.agent_stream_timeout_seconds,
+            max_run_seconds=app_settings.agent_max_run_seconds,
+            max_retries=app_settings.agent_max_retries,
+            max_retry_delay_seconds=app_settings.agent_max_retry_delay_seconds,
+            max_image_bytes=app_settings.agent_max_image_bytes,
+        )
+    agent_runtime = agent_runtime or AgentRuntime(
+        agent_repository,
+        repository,
+        agent_provider,
+        app_settings,
+        agent_tool_registry,
+        tools_available=(
+            agent_capabilities.function_tools
+            or (injected_provider_available and allow_unprobed_agent_provider_for_tests)
+        ),
+        artifacts=artifacts,
+        image_input_available=(
+            agent_capabilities.image_input
+            or (
+                injected_provider_available
+                and allow_unprobed_agent_provider_for_tests
+                and bool(getattr(agent_provider, "image_input", False))
+                and app_settings.agent_image_input_enabled
+            )
+        ),
+        image_generation_available=(
+            agent_capabilities.image_generation
+            or (
+                injected_provider_available
+                and allow_unprobed_agent_provider_for_tests
+                and bool(getattr(agent_provider, "image_generation", False))
+                and app_settings.agent_image_enabled
+            )
+        ),
     )
     if job_dispatcher is None:
         if redis_streams is not None and (
@@ -209,6 +293,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         await compute_session_service.restore()
+        await agent_runtime.recover_incomplete()
         await job_service.restore_inflight()
         heartbeat_stop = asyncio.Event()
         heartbeat_task = (
@@ -224,6 +309,7 @@ def create_app(
         finally:
             if heartbeat_task is not None and heartbeat_monitor is not None:
                 await heartbeat_monitor.stop(heartbeat_task, heartbeat_stop)
+            await agent_runtime.close()
             await job_service.close()
             await compute_session_service.close()
             if redis_streams is not None:
@@ -281,6 +367,10 @@ def create_app(
     app.state.redis_streams = redis_streams
     app.state.repository = repository
     app.state.job_service = job_service
+    app.state.agent_capability_service = agent_capability_service
+    app.state.agent_repository = agent_repository
+    app.state.agent_runtime = agent_runtime
+    app.include_router(create_agent_router(agent_capability_service, agent_runtime))
     app.include_router(
         create_compute_router(inventory_service, compute_session_service, capability_service)
     )

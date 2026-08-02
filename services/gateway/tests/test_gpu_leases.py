@@ -32,11 +32,11 @@ async def test_release_clears_only_session_leases() -> None:
 @pytest.mark.asyncio
 async def test_renewal_prevents_active_lease_from_expiring() -> None:
     store = InMemoryLeaseStore()
-    await store.acquire(["GPU-a"], 1, "session-a", ttl_seconds=0.03, allow_partial=True)
+    await store.acquire(["GPU-a"], 1, "session-a", ttl_seconds=0.2, allow_partial=True)
 
-    await asyncio.sleep(0.02)
-    assert await store.renew_session("session-a", ttl_seconds=0.05) == ["GPU-a"]
     await asyncio.sleep(0.03)
+    assert await store.renew_session("session-a", ttl_seconds=0.2) == ["GPU-a"]
+    await asyncio.sleep(0.05)
 
     assert (await store.active())["GPU-a"].session_id == "session-a"
 

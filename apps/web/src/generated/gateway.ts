@@ -21,6 +21,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Capabilities */
+        get: operations["get_capabilities_v1_agent_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Run */
+        post: operations["create_run_v1_agent_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_v1_agent_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run */
+        post: operations["cancel_run_v1_agent_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Events */
+        get: operations["run_events_v1_agent_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Messages */
+        get: operations["list_messages_v1_agent_threads__thread_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/tool-calls/{tool_call_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Tool Call */
+        post: operations["approve_tool_call_v1_agent_tool_calls__tool_call_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/tool-calls/{tool_call_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Tool Call */
+        post: operations["reject_tool_call_v1_agent_tool_calls__tool_call_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assets": {
         parameters: {
             query?: never;
@@ -210,6 +346,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/conversations/{conversation_id}/agent/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Thread */
+        get: operations["get_thread_v1_conversations__conversation_id__agent_thread_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs": {
         parameters: {
             query?: never;
@@ -384,6 +537,353 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentApprovalDecision */
+        AgentApprovalDecision: {
+            /** Clientversion */
+            clientVersion?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** AgentApprovalResponse */
+        AgentApprovalResponse: {
+            /** Argumentshash */
+            argumentsHash: string;
+            /** Consumedat */
+            consumedAt?: string | null;
+            /** Decidedat */
+            decidedAt?: string | null;
+            /** Estimatedcost */
+            estimatedCost?: string | null;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Id */
+            id: string;
+            /** Runid */
+            runId: string;
+            status: components["schemas"]["AgentApprovalStatus"];
+            /** Toolcallid */
+            toolCallId: string;
+        };
+        /**
+         * AgentApprovalStatus
+         * @enum {string}
+         */
+        AgentApprovalStatus: "pending" | "approved" | "rejected" | "consumed" | "expired";
+        /** AgentCapabilitiesResponse */
+        AgentCapabilitiesResponse: {
+            /** Available */
+            available: boolean;
+            /** Configured */
+            configured: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Functiontools
+             * @default false
+             */
+            functionTools: boolean;
+            /**
+             * Imagegeneration
+             * @default false
+             */
+            imageGeneration: boolean;
+            /**
+             * Imageinput
+             * @default false
+             */
+            imageInput: boolean;
+            /**
+             * Maxapprovals
+             * @default 0
+             */
+            maxApprovals: number;
+            /**
+             * Maxtoolcalls
+             * @default 0
+             */
+            maxToolCalls: number;
+            /**
+             * Maxturns
+             * @default 0
+             */
+            maxTurns: number;
+            /** Model */
+            model?: string | null;
+            /** Provider */
+            provider?: "openai-responses" | null;
+            /** Reasoncode */
+            reasonCode?: string | null;
+            /**
+             * Streaming
+             * @default false
+             */
+            streaming: boolean;
+            /**
+             * Text
+             * @default false
+             */
+            text: boolean;
+            /** Tools */
+            tools?: components["schemas"]["AgentToolCapability"][];
+            /**
+             * Toolsenabled
+             * @default false
+             */
+            toolsEnabled: boolean;
+            /** Transports */
+            transports?: ("sse" | "websocket")[];
+            /**
+             * Usage
+             * @default false
+             */
+            usage: boolean;
+            /**
+             * Websocketdeclared
+             * @default false
+             */
+            websocketDeclared: boolean;
+            /**
+             * Websocketverified
+             * @default false
+             */
+            websocketVerified: boolean;
+        };
+        /** AgentMessageContent */
+        AgentMessageContent: {
+            draftProposal?: components["schemas"]["DraftProposal"] | null;
+            /** Rationale */
+            rationale?: string[];
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** AgentMessageResponse */
+        AgentMessageResponse: {
+            /** Completedat */
+            completedAt?: string | null;
+            content: components["schemas"]["AgentMessageContent"];
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Id */
+            id: string;
+            /** Provideritemid */
+            providerItemId?: string | null;
+            role: components["schemas"]["AgentMessageRole"];
+            /** Runid */
+            runId?: string | null;
+            /** Sequence */
+            sequence: number;
+            status: components["schemas"]["AgentMessageStatus"];
+            /** Threadid */
+            threadId: string;
+        };
+        /**
+         * AgentMessageRole
+         * @enum {string}
+         */
+        AgentMessageRole: "user" | "assistant" | "tool" | "system_summary";
+        /**
+         * AgentMessageStatus
+         * @enum {string}
+         */
+        AgentMessageStatus: "streaming" | "completed" | "failed";
+        /** AgentRunCreate */
+        AgentRunCreate: {
+            /** Assetids */
+            assetIds?: string[];
+            /** Conversationid */
+            conversationId: string;
+            draftSnapshot: components["schemas"]["GenerationDraft"];
+            /** Message */
+            message: string;
+            /**
+             * Mode
+             * @default assist
+             * @enum {string}
+             */
+            mode: "assist" | "image-analysis" | "storyboard";
+        };
+        /** AgentRunResponse */
+        AgentRunResponse: {
+            /** Conversationid */
+            conversationId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Inputsnapshot */
+            inputSnapshot: {
+                [key: string]: unknown;
+            };
+            /** Model */
+            model: string;
+            /** Outputmessageid */
+            outputMessageId?: string | null;
+            /** Promptversion */
+            promptVersion: string;
+            /** Provider */
+            provider: string;
+            /** Providerresponseid */
+            providerResponseId?: string | null;
+            /** Reasoningeffort */
+            reasoningEffort: string;
+            /** Startedat */
+            startedAt?: string | null;
+            status: components["schemas"]["AgentRunStatus"];
+            /** Threadid */
+            threadId: string;
+            /** Toolsetversion */
+            toolsetVersion: string;
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "sse" | "websocket";
+            usage?: components["schemas"]["AgentUsage"];
+        };
+        /**
+         * AgentRunStatus
+         * @enum {string}
+         */
+        AgentRunStatus: "queued" | "streaming" | "waiting_approval" | "executing_tool" | "cancelling" | "cancelled" | "completed" | "failed" | "expired" | "recovering";
+        /** AgentThreadResponse */
+        AgentThreadResponse: {
+            /** Conversationid */
+            conversationId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Id */
+            id: string;
+            /** Promptversion */
+            promptVersion: string;
+            status: components["schemas"]["AgentThreadStatus"];
+            /**
+             * Summarycursor
+             * @default 0
+             */
+            summaryCursor: number;
+            /** Summarytext */
+            summaryText?: string | null;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * AgentThreadStatus
+         * @enum {string}
+         */
+        AgentThreadStatus: "active" | "archived";
+        /** AgentToolCallResponse */
+        AgentToolCallResponse: {
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Argumentshash */
+            argumentsHash: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Resourceid */
+            resourceId?: string | null;
+            /** Resourcetype */
+            resourceType?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            risk: components["schemas"]["AgentToolRisk"];
+            /** Runid */
+            runId: string;
+            /** Startedat */
+            startedAt?: string | null;
+            status: components["schemas"]["AgentToolCallStatus"];
+            /** Toolname */
+            toolName: string;
+            /** Toolversion */
+            toolVersion: string;
+        };
+        /**
+         * AgentToolCallStatus
+         * @enum {string}
+         */
+        AgentToolCallStatus: "proposed" | "waiting_approval" | "approved" | "running" | "succeeded" | "failed" | "rejected" | "expired";
+        /** AgentToolCapability */
+        AgentToolCapability: {
+            /** Name */
+            name: string;
+            /** Requiresapproval */
+            requiresApproval: boolean;
+            risk: components["schemas"]["AgentToolRisk"];
+        };
+        /** AgentToolDecisionResponse */
+        AgentToolDecisionResponse: {
+            approval: components["schemas"]["AgentApprovalResponse"];
+            run: components["schemas"]["AgentRunResponse"];
+            toolCall: components["schemas"]["AgentToolCallResponse"];
+        };
+        /**
+         * AgentToolRisk
+         * @enum {string}
+         */
+        AgentToolRisk: "read" | "proposal" | "write" | "costly" | "destructive";
+        /** AgentUsage */
+        AgentUsage: {
+            /**
+             * Inputtokens
+             * @default 0
+             */
+            inputTokens: number;
+            /**
+             * Outputtokens
+             * @default 0
+             */
+            outputTokens: number;
+            /**
+             * Providerrequests
+             * @default 0
+             */
+            providerRequests: number;
+            /**
+             * Totaltokens
+             * @default 0
+             */
+            totalTokens: number;
+        };
         /** AssetResponse */
         AssetResponse: {
             /**
@@ -399,6 +899,7 @@ export interface components {
             mediaType: string;
             /** Previewurl */
             previewUrl?: string | null;
+            provenance?: components["schemas"]["GeneratedImageProvenance"] | null;
             /** Sizebytes */
             sizeBytes: number;
             /** Sourcejobid */
@@ -549,6 +1050,73 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
+        };
+        /** DraftProposal */
+        DraftProposal: {
+            /** Duration */
+            duration?: number | null;
+            /** Firstframeassetid */
+            firstFrameAssetId?: string | null;
+            /** Firststrength */
+            firstStrength?: number | null;
+            /** Lastframeassetid */
+            lastFrameAssetId?: string | null;
+            /** Laststrength */
+            lastStrength?: number | null;
+            /** Negativeprompt */
+            negativePrompt?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /** Ratio */
+            ratio?: ("16:9" | "9:16" | "1:1") | null;
+            /** Resolution */
+            resolution?: ("720p" | "1080p") | null;
+            /** Seed */
+            seed?: number | null;
+        };
+        /** GeneratedImageProvenance */
+        GeneratedImageProvenance: {
+            /** Agentrunid */
+            agentRunId: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Model */
+            model: string;
+            /** Outputindex */
+            outputIndex: number;
+            /** Promptsha256 */
+            promptSha256: string;
+            /** Provider */
+            provider: string;
+            /** Providerresponseid */
+            providerResponseId?: string | null;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "first-frame" | "last-frame" | "style-reference";
+            /**
+             * Ratio
+             * @enum {string}
+             */
+            ratio: "16:9" | "9:16" | "1:1";
+            /**
+             * Safetyoutcome
+             * @default accepted
+             * @constant
+             */
+            safetyOutcome: "accepted";
+            /**
+             * Sourcetype
+             * @default agent-image
+             * @constant
+             */
+            sourceType: "agent-image";
+            /** Toolcallid */
+            toolCallId: string;
         };
         /** GenerationDraft */
         GenerationDraft: {
@@ -878,6 +1446,272 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceHealth"];
+                };
+            };
+        };
+    };
+    get_capabilities_v1_agent_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCapabilitiesResponse"];
+                };
+            };
+        };
+    };
+    create_run_v1_agent_runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_v1_agent_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_v1_agent_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_events_v1_agent_runs__run_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_messages_v1_agent_threads__thread_id__messages_get: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_tool_call_v1_agent_tool_calls__tool_call_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                tool_call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolDecisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_tool_call_v1_agent_tool_calls__tool_call_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                tool_call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolDecisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1293,6 +2127,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_v1_conversations__conversation_id__agent_thread_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentThreadResponse"];
                 };
             };
             /** @description Validation Error */

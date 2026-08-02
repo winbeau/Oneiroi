@@ -1,0 +1,13 @@
+id: image-1
+data: {"type":"response.created","response":{"id":"resp-image"}}
+
+id: image-2
+data: {"type":"response.image_generation_call.in_progress"}
+
+id: image-3
+data: {"type":"response.image_generation_call.completed","result":"iVBORw0KGgo="}
+
+id: image-4
+data: {"type":"response.completed","response":{"id":"resp-image","usage":{"input_tokens":20,"output_tokens":5,"total_tokens":25}}}
+
+data: [DONE]

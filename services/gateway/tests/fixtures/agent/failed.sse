@@ -1,0 +1,7 @@
+id: failed-1
+data: {"type":"response.created","response":{"id":"resp-failed"}}
+
+id: failed-2
+data: {"type":"response.failed","response":{"id":"resp-failed","error":{"code":"provider_error","message":"sensitive provider detail"}}}
+
+data: [DONE]

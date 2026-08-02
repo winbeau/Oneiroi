@@ -1,0 +1,5 @@
+id: interrupted-1
+data: {"type":"response.created","response":{"id":"resp-interrupted"}}
+
+id: interrupted-2
+data: {"type":"response.output_text.delta","delta":"partial only"}

@@ -22,6 +22,21 @@ class ConversationResponse(ContractModel):
     updated_at: datetime
 
 
+class GeneratedImageProvenance(ContractModel):
+    source_type: Literal["agent-image"] = "agent-image"
+    agent_run_id: str
+    tool_call_id: str
+    output_index: int = Field(ge=0, le=1)
+    provider: str
+    model: str
+    prompt_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+    purpose: Literal["first-frame", "last-frame", "style-reference"]
+    ratio: Literal["16:9", "9:16", "1:1"]
+    provider_response_id: str | None = None
+    safety_outcome: Literal["accepted"] = "accepted"
+    created_at: datetime
+
+
 class AssetResponse(ContractModel):
     id: str
     type: Literal["image", "video", "template"]
@@ -33,6 +48,7 @@ class AssetResponse(ContractModel):
     height: int | None = Field(default=None, ge=1)
     source_job_id: str | None = None
     preview_url: str | None = None
+    provenance: GeneratedImageProvenance | None = None
 
 
 class GenerationDraft(ContractModel):

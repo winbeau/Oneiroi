@@ -22,7 +22,12 @@ def bind_gpu(settings: RunnerSettings) -> None:
 
 
 def validate_process_identity(settings: RunnerSettings) -> None:
-    if settings.environment == "production" and os.geteuid() == 0:
+    if settings.environment != "production":
+        return
+    effective_uid = getattr(os, "geteuid", None)
+    if effective_uid is None:
+        raise RuntimeError("production Runner requires a verifiable dedicated non-root user")
+    if effective_uid() == 0:
         raise RuntimeError("production Runner must use a dedicated non-root user")
 
 

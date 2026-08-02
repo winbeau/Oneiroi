@@ -1,0 +1,19 @@
+id: tool-1
+data: {"type":"response.created","response":{"id":"resp-tool"}}
+
+id: tool-2
+data: {"type":"response.output_item.added","output_index":0,"item":{"id":"item-tool","type":"function_call","call_id":"call-tool","name":"echo_probe","arguments":""}}
+
+id: tool-3
+data: {"type":"response.function_call_arguments.delta","item_id":"item-tool","delta":"{\"value\":"}
+
+id: tool-4
+data: {"type":"response.function_call_arguments.delta","item_id":"item-tool","delta":"\"probe\"}"}
+
+id: tool-5
+data: {"type":"response.function_call_arguments.done","item_id":"item-tool","arguments":"{\"value\":\"probe\"}"}
+
+id: tool-6
+data: {"type":"response.completed","response":{"id":"resp-tool","usage":{"input_tokens":10,"output_tokens":3,"total_tokens":13}}}
+
+data: [DONE]

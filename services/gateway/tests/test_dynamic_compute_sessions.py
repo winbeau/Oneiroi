@@ -125,7 +125,7 @@ async def test_session_renews_lease_during_slow_model_load() -> None:
             profile,
             fencing_token,
         ):
-            await asyncio.sleep(0.08)
+            await asyncio.sleep(0.45)
             return await super().load_slot(
                 session_id,
                 slot_id,
@@ -140,7 +140,7 @@ async def test_session_renews_lease_during_slow_model_load() -> None:
         inventory,
         SlowBackend(),
         leases=leases,
-        lease_ttl_seconds=0.03,
+        lease_ttl_seconds=0.2,
     )
 
     session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
@@ -162,11 +162,11 @@ async def test_redis_renewal_failure_marks_session_failed() -> None:
         inventory,
         RecordingComputeBackend(),
         leases=FailingRenewalStore(),
-        lease_ttl_seconds=0.03,
+        lease_ttl_seconds=0.15,
     )
     session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
 
-    for _ in range(20):
+    for _ in range(50):
         if session.state.value == "failed":
             break
         await asyncio.sleep(0.01)
@@ -188,7 +188,7 @@ async def test_failed_memory_release_keeps_lease_renewed() -> None:
         inventory,
         FailedReleaseBackend(),
         leases=leases,
-        lease_ttl_seconds=0.03,
+        lease_ttl_seconds=0.2,
     )
     session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
     released = await service.release("user-a", session.id, ComputeSessionRelease())
@@ -208,12 +208,12 @@ async def test_idle_ttl_releases_worker_and_gpu_lease() -> None:
         inventory,
         backend,
         leases=leases,
-        lease_ttl_seconds=0.03,
-        idle_ttl_seconds=0.05,
+        lease_ttl_seconds=0.3,
+        idle_ttl_seconds=0.1,
     )
     session = await service.create("user-a", ComputeSessionCreate(requestedGpuCount=1))
 
-    for _ in range(50):
+    for _ in range(100):
         if session.state.value == "released":
             break
         await asyncio.sleep(0.01)

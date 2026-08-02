@@ -1,0 +1,3 @@
+apps/web/openapi/*.json text eol=lf
+apps/web/src/generated/*.ts text eol=lf
+services/gateway/tests/fixtures/agent/*.sse text eol=lf

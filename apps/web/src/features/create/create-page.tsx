@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { WorkspaceSidebar } from "@/components/layout/workspace-sidebar";
 import { Button } from "@/components/ui/button";
+import { AgentPanel } from "@/features/create/agent-panel";
 import { Composer } from "@/features/create/composer";
 import { JobCard } from "@/features/create/job-card";
 import {
@@ -15,7 +16,12 @@ import { useStudioStore } from "@/store/studio-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
 function CreationConsole() {
-  return <Composer />;
+  return (
+    <div className="space-y-2.5">
+      <AgentPanel />
+      <Composer />
+    </div>
+  );
 }
 
 function BrandSlogan({ compact = false }: { compact?: boolean }) {
