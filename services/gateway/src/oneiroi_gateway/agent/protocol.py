@@ -66,6 +66,8 @@ class ProviderRequest(BaseModel):
     input_items: list[dict[str, Any]] = Field(default_factory=list, max_length=64)
     tools: list[ProviderTool] = Field(default_factory=list, max_length=32)
     builtin_tools: list[Literal["image_generation"]] = Field(default_factory=list, max_length=1)
+    image_size: Annotated[str | None, Field(default=None, max_length=40)] = None
+    image_quality: Annotated[str | None, Field(default=None, max_length=40)] = None
     reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] = "high"
     max_output_tokens: Annotated[int, Field(ge=1, le=100_000)] = 4_000
     store: Literal[False] = False
@@ -105,6 +107,12 @@ class ImageGenerationRequest(BaseModel):
     request_id: Annotated[str, Field(min_length=1, max_length=128)]
     size: Annotated[str | None, Field(default=None, max_length=40)]
     quality: Annotated[str | None, Field(default=None, max_length=40)]
+    negative_prompt: Annotated[str | None, Field(default=None, max_length=2_000)] = Field(
+        default=None, alias="negativePrompt"
+    )
+    reference_images: list[Annotated[str, Field(max_length=140_000_000)]] = Field(
+        default_factory=list, alias="referenceImages", max_length=4
+    )
 
 
 class GeneratedImage(BaseModel):
@@ -121,6 +129,14 @@ class ImageGenerationResult(BaseModel):
 
     images: list[GeneratedImage] = Field(min_length=1, max_length=2)
     response_id: str | None = None
+    event_count: int = Field(default=0, ge=0, le=10_000)
+
+
+class ResolvedGeneratedImage(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    content: bytes
+    media_type: str | None = None
 
 
 def _require_strict_objects(schema: Any) -> None:
@@ -138,6 +154,10 @@ class AgentProvider(Protocol):
     async def stream_response(self, request: ProviderRequest) -> AsyncIterator[ProviderEvent]: ...
 
     async def generate_image(self, request: ImageGenerationRequest) -> ImageGenerationResult: ...
+
+    async def resolve_generated_image(
+        self, image: GeneratedImage, *, max_bytes: int
+    ) -> ResolvedGeneratedImage: ...
 
     async def probe(
         self,

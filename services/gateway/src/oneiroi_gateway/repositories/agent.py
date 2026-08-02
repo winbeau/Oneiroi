@@ -39,6 +39,8 @@ class StoredAgentRun:
     request_hash: str
     executor_id: str | None = None
     execution_lease_expires_at: datetime | None = None
+    active_duration_seconds: float = 0
+    provider_event_count: int = 0
 
 
 @dataclass(slots=True)
@@ -132,6 +134,22 @@ class AgentRepository(Protocol):
 
     async def release_run_execution(
         self, owner_id: str, run_id: str, executor_id: str
+    ) -> StoredAgentRun: ...
+
+    async def record_active_seconds(
+        self,
+        owner_id: str,
+        run_id: str,
+        executor_id: str,
+        seconds: float,
+    ) -> StoredAgentRun: ...
+
+    async def consume_provider_event(
+        self,
+        owner_id: str,
+        run_id: str,
+        executor_id: str,
+        maximum: int,
     ) -> StoredAgentRun: ...
 
     async def transition_run(
@@ -402,6 +420,38 @@ class InMemoryAgentRepository:
                 run.execution_lease_expires_at = None
             return _copy_run(run)
 
+    async def record_active_seconds(
+        self,
+        owner_id: str,
+        run_id: str,
+        executor_id: str,
+        seconds: float,
+    ) -> StoredAgentRun:
+        async with self._lock:
+            run = self.runs.get(run_id)
+            if run is None or run.owner_id != owner_id:
+                raise KeyError(run_id)
+            _assert_execution_owned(run, executor_id)
+            run.active_duration_seconds += max(0.0, seconds)
+            return _copy_run(run)
+
+    async def consume_provider_event(
+        self,
+        owner_id: str,
+        run_id: str,
+        executor_id: str,
+        maximum: int,
+    ) -> StoredAgentRun:
+        async with self._lock:
+            run = self.runs.get(run_id)
+            if run is None or run.owner_id != owner_id:
+                raise KeyError(run_id)
+            _assert_execution_owned(run, executor_id)
+            if run.provider_event_count >= maximum:
+                raise ValueError("AGENT_EVENT_LIMIT_EXCEEDED")
+            run.provider_event_count += 1
+            return _copy_run(run)
+
     async def transition_run(
         self,
         run: StoredAgentRun,
@@ -420,6 +470,8 @@ class InMemoryAgentRepository:
             updated = _copy_run(run)
             updated.executor_id = existing.executor_id
             updated.execution_lease_expires_at = existing.execution_lease_expires_at
+            updated.active_duration_seconds = existing.active_duration_seconds
+            updated.provider_event_count = existing.provider_event_count
             self.runs[run.response.id] = updated
             return self._append_event_locked(run.owner_id, run.response, event_type, payload)
 
@@ -474,6 +526,8 @@ class InMemoryAgentRepository:
             updated = _copy_run(run)
             updated.executor_id = existing.executor_id
             updated.execution_lease_expires_at = existing.execution_lease_expires_at
+            updated.active_duration_seconds = existing.active_duration_seconds
+            updated.provider_event_count = existing.provider_event_count
             self.runs[run.response.id] = updated
             self.messages.setdefault(run.response.thread_id, []).append((run.owner_id, message))
             self._append_event_locked(run.owner_id, run.response, event_type, payload)
@@ -842,6 +896,8 @@ def _copy_run(run: StoredAgentRun) -> StoredAgentRun:
         request_hash=run.request_hash,
         executor_id=run.executor_id,
         execution_lease_expires_at=run.execution_lease_expires_at,
+        active_duration_seconds=run.active_duration_seconds,
+        provider_event_count=run.provider_event_count,
     )
 
 

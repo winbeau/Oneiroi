@@ -3,16 +3,23 @@ import hashlib
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
 from oneiroi_common.agent import AgentToolRisk, DraftProposal
 from oneiroi_common.compute import ContractModel
-from oneiroi_common.studio import GenerationDraft
-from oneiroi_gateway.agent.protocol import ProviderTool
-from oneiroi_gateway.repositories.agent import StoredAgentRun
+from oneiroi_common.studio import GeneratedImageProvenance, GenerationDraft
+from oneiroi_gateway.agent.protocol import (
+    AgentProvider,
+    AgentProviderError,
+    ImageGenerationRequest,
+    ProviderTool,
+)
+from oneiroi_gateway.repositories.agent import AgentExecutionOwned, StoredAgentRun
 from oneiroi_gateway.repositories.studio import StudioRepository
+from oneiroi_gateway.services.artifact_service import ArtifactService
 
 
 class SafeAssetMetadata(ContractModel):
@@ -92,11 +99,36 @@ class ProposeDraftPatchResult(ProposeDraftPatchArguments):
     pass
 
 
+class GenerateReferenceImageArguments(ContractModel):
+    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    negative_prompt: Annotated[str | None, Field(default=None, max_length=2_000)]
+    purpose: Literal["first-frame", "last-frame", "style-reference"]
+    ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
+    count: Literal[1, 2] = 1
+    reference_asset_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
+        default_factory=list, max_length=4
+    )
+
+
+class GenerateReferenceImageResult(ContractModel):
+    assets: list[SafeAssetMetadata] = Field(min_length=1, max_length=2)
+    partial: bool = False
+    error_code: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class ToolExecutionContext:
     owner_id: str
     run: StoredAgentRun
     studio: StudioRepository
+    tool_call_id: str | None = None
+    provider: AgentProvider | None = None
+    artifacts: ArtifactService | None = None
+    image_model: str | None = None
+    max_image_bytes: int = 0
+    image_input_available: bool = False
+    ensure_execution_owned: Callable[[], Awaitable[None]] | None = None
+    consume_provider_events: Callable[[int], Awaitable[None]] | None = None
 
 
 MAX_TOOL_ARGUMENT_BYTES = 32 * 1024
@@ -117,6 +149,7 @@ class RegisteredTool:
     timeout_seconds: float
     handler: ToolHandler
     estimated_cost: str | None = None
+    requires_image_generation: bool = False
 
     @property
     def requires_approval(self) -> bool:
@@ -143,11 +176,18 @@ class ToolRegistry:
             _ = tool.provider_tool()
             self._tools[tool.name] = tool
 
-    def definitions(self) -> list[RegisteredTool]:
-        return list(self._tools.values())
+    def definitions(self, *, image_generation_available: bool = False) -> list[RegisteredTool]:
+        return [
+            tool
+            for tool in self._tools.values()
+            if image_generation_available or not tool.requires_image_generation
+        ]
 
-    def provider_tools(self) -> list[ProviderTool]:
-        return [tool.provider_tool() for tool in self._tools.values()]
+    def provider_tools(self, *, image_generation_available: bool = False) -> list[ProviderTool]:
+        return [
+            tool.provider_tool()
+            for tool in self.definitions(image_generation_available=image_generation_available)
+        ]
 
     def require(self, name: str) -> RegisteredTool:
         try:
@@ -194,7 +234,7 @@ def canonical_arguments(arguments: dict[str, Any]) -> tuple[dict[str, Any], str,
     return arguments, canonical, hashlib.sha256(encoded).hexdigest()
 
 
-def builtin_tool_registry() -> ToolRegistry:
+def builtin_tool_registry(*, image_timeout_seconds: float = 180) -> ToolRegistry:
     return ToolRegistry(
         [
             RegisteredTool(
@@ -260,6 +300,22 @@ def builtin_tool_registry() -> ToolRegistry:
                 max_calls_per_run=2,
                 timeout_seconds=5,
                 handler=_propose_draft_patch,
+            ),
+            RegisteredTool(
+                name="generate_reference_image",
+                version="1",
+                description=(
+                    "Generate one or two owner-bound reference images through the configured "
+                    "provider and persist every validated result as a real Asset."
+                ),
+                input_model=GenerateReferenceImageArguments,
+                output_model=GenerateReferenceImageResult,
+                risk=AgentToolRisk.COSTLY,
+                max_calls_per_run=1,
+                timeout_seconds=image_timeout_seconds,
+                estimated_cost="external image generation for 1-2 images",
+                requires_image_generation=True,
+                handler=_generate_reference_image,
             ),
         ]
     )
@@ -342,6 +398,120 @@ async def _propose_draft_patch(
         proposal=parsed.proposal,
         rationale=parsed.rationale,
         warnings=parsed.warnings,
+    )
+
+
+async def _generate_reference_image(
+    context: ToolExecutionContext, arguments: BaseModel
+) -> GenerateReferenceImageResult:
+    parsed = GenerateReferenceImageArguments.model_validate(arguments)
+    if (
+        context.provider is None
+        or context.artifacts is None
+        or context.tool_call_id is None
+        or context.image_model is None
+        or context.max_image_bytes < 1
+    ):
+        raise RuntimeError("AGENT_IMAGE_NOT_CONFIGURED")
+    if parsed.reference_asset_ids and not context.image_input_available:
+        raise RuntimeError("AGENT_IMAGE_NOT_SUPPORTED")
+    reference_images = [
+        await context.artifacts.provider_image_data_url(
+            context.owner_id,
+            asset_id,
+            max_bytes=context.max_image_bytes,
+        )
+        for asset_id in parsed.reference_asset_ids
+    ]
+    prompt_hash = hashlib.sha256(
+        json.dumps(
+            {"prompt": parsed.prompt, "negativePrompt": parsed.negative_prompt},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    assets: list[SafeAssetMetadata] = []
+    partial_error: str | None = None
+    for request_index in range(parsed.count):
+        if len(assets) >= parsed.count:
+            break
+        if context.ensure_execution_owned is not None:
+            await context.ensure_execution_owned()
+        try:
+            result = await context.provider.generate_image(
+                ImageGenerationRequest(
+                    model=context.image_model,
+                    prompt=parsed.prompt,
+                    negativePrompt=parsed.negative_prompt,
+                    request_id=f"{context.tool_call_id}-{request_index}",
+                    size={"16:9": "1536x1024", "9:16": "1024x1536", "1:1": "1024x1024"}[
+                        parsed.ratio
+                    ],
+                    referenceImages=reference_images,
+                )
+            )
+            if context.consume_provider_events is not None:
+                await context.consume_provider_events(result.event_count)
+        except AgentProviderError as exc:
+            if not assets:
+                raise
+            partial_error = exc.code.value
+            break
+        assets_before_response = len(assets)
+        for generated in result.images:
+            if len(assets) >= parsed.count:
+                break
+            try:
+                if context.ensure_execution_owned is not None:
+                    await context.ensure_execution_owned()
+                resolved = await context.provider.resolve_generated_image(
+                    generated, max_bytes=context.max_image_bytes
+                )
+                if context.ensure_execution_owned is not None:
+                    await context.ensure_execution_owned()
+                output_index = len(assets)
+                provenance = GeneratedImageProvenance(
+                    agentRunId=context.run.response.id,
+                    toolCallId=context.tool_call_id,
+                    outputIndex=output_index,
+                    provider=context.run.response.provider,
+                    model=context.image_model,
+                    promptSha256=prompt_hash,
+                    purpose=parsed.purpose,
+                    ratio=parsed.ratio,
+                    providerResponseId=result.response_id,
+                    createdAt=datetime.now(UTC),
+                )
+                asset = await context.artifacts.create_generated_image(
+                    context.owner_id,
+                    resolved.content,
+                    {
+                        "first-frame": "Agent 首帧参考图",
+                        "last-frame": "Agent 尾帧参考图",
+                        "style-reference": "Agent 风格参考图",
+                    }[parsed.purpose],
+                    provenance,
+                    max_bytes=context.max_image_bytes,
+                    ensure_execution_owned=context.ensure_execution_owned,
+                )
+                assets.append(_safe_asset(asset))
+            except AgentExecutionOwned:
+                raise
+            except AgentProviderError as exc:
+                partial_error = partial_error or exc.code.value
+                continue
+            except (OSError, RuntimeError, ValueError):
+                partial_error = partial_error or "AGENT_IMAGE_INVALID"
+                continue
+        if len(assets) == assets_before_response:
+            break
+    if not assets:
+        raise RuntimeError(partial_error or "AGENT_IMAGE_REJECTED")
+    return GenerateReferenceImageResult(
+        assets=assets,
+        partial=len(assets) < parsed.count,
+        errorCode=partial_error if len(assets) < parsed.count else None,
     )
 
 

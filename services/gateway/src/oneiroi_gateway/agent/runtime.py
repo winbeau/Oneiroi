@@ -1,8 +1,10 @@
 import asyncio
 import hashlib
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from uuid import uuid4
 
 from pydantic import ValidationError
@@ -23,6 +25,7 @@ from oneiroi_common.agent import (
     AgentToolDecisionResponse,
     AgentUsage,
 )
+from oneiroi_common.studio import AssetResponse
 from oneiroi_gateway.agent.prompts import PROMPT_VERSION, SYSTEM_INSTRUCTIONS, TOOLSET_VERSION
 from oneiroi_gateway.agent.protocol import (
     AgentProvider,
@@ -48,6 +51,7 @@ from oneiroi_gateway.repositories.agent import (
     StoredAgentToolCall,
 )
 from oneiroi_gateway.repositories.studio import StudioRepository
+from oneiroi_gateway.services.artifact_service import ArtifactService
 from oneiroi_gateway.settings import GatewaySettings
 
 
@@ -107,12 +111,20 @@ class AgentRuntime:
         tool_registry: ToolRegistry | None = None,
         *,
         tools_available: bool | None = None,
+        artifacts: ArtifactService | None = None,
+        image_input_available: bool = False,
+        image_generation_available: bool = False,
     ) -> None:
         self.repository = repository
         self.studio = studio
         self.provider = provider
         self.settings = settings
-        self.tool_registry = tool_registry or builtin_tool_registry()
+        self.artifacts = artifacts
+        self.image_input_available = image_input_available
+        self.image_generation_available = image_generation_available
+        self.tool_registry = tool_registry or builtin_tool_registry(
+            image_timeout_seconds=settings.agent_image_tool_timeout_seconds
+        )
         self.tools_enabled = settings.agent_tools_enabled and (
             True if tools_available is None else tools_available
         )
@@ -122,6 +134,7 @@ class AgentRuntime:
         self._user_cancelled: set[str] = set()
         self._approval_tasks: dict[str, asyncio.Task[None]] = {}
         self._lease_lost: set[str] = set()
+        self._budget_timed_out: set[str] = set()
         self.executor_id = f"agent-executor-{uuid4().hex}"
         self._shutting_down = False
 
@@ -131,7 +144,7 @@ class AgentRuntime:
         payload: AgentRunCreate,
         idempotency_key: str,
     ) -> AgentRunResponse:
-        if self.provider is None:
+        if not self.settings.agent_enabled or self.provider is None:
             raise AgentRuntimeError(
                 "AGENT_NOT_CONFIGURED",
                 503,
@@ -414,14 +427,16 @@ class AgentRuntime:
                         AgentToolCallStatus.APPROVED,
                         AgentToolCallStatus.RUNNING,
                     }:
+                        result = await self._tool_interruption_result(
+                            stored.owner_id,
+                            tool_call,
+                            "AGENT_TOOL_RECOVERY_REQUIRED",
+                        )
                         await self.repository.finish_tool(
                             stored.owner_id,
                             tool_call.response.id,
                             status=AgentToolCallStatus.FAILED,
-                            result={
-                                "ok": False,
-                                "error": {"code": "AGENT_TOOL_RECOVERY_REQUIRED"},
-                            },
+                            result=result,
                             error_code="AGENT_TOOL_RECOVERY_REQUIRED",
                             error_message=(
                                 "The interrupted tool was not replayed because its outcome is "
@@ -468,6 +483,28 @@ class AgentRuntime:
             await asyncio.gather(*tasks, return_exceptions=True)
         if self.provider is not None:
             await self.provider.close()
+
+    async def _consume_provider_events(self, owner_id: str, run_id: str, count: int) -> None:
+        for _ in range(count):
+            try:
+                await self.repository.consume_provider_event(
+                    owner_id,
+                    run_id,
+                    self.executor_id,
+                    self.settings.agent_max_events_per_run,
+                )
+            except ValueError:
+                raise AgentRuntimeError(
+                    "AGENT_OUTPUT_INVALID", 422, "Agent event limit exceeded."
+                ) from None
+
+    async def _ensure_execution_owned(self, owner_id: str, run_id: str) -> None:
+        await self.repository.renew_run_execution(
+            owner_id,
+            run_id,
+            self.executor_id,
+            self._lease_expiry(),
+        )
 
     def _lease_expiry(self) -> datetime:
         return utc_now() + timedelta(seconds=self.settings.agent_execution_lease_seconds)
@@ -587,6 +624,40 @@ class AgentRuntime:
         )
 
     async def _resume_tool(self, decision: AgentToolDecision) -> None:
+        run_id = decision.run.response.id
+        latest = await self.repository.get_run(decision.run.owner_id, run_id)
+        remaining = max(
+            0.0,
+            self.settings.agent_max_run_seconds - latest.active_duration_seconds,
+        )
+        segment_started = asyncio.get_running_loop().time()
+        work = asyncio.create_task(
+            self._resume_tool_work(decision),
+            name=f"agent-tool-work-{decision.tool_call.response.id}",
+        )
+        try:
+            done, _ = await asyncio.wait({work}, timeout=remaining)
+            if not done:
+                self._budget_timed_out.add(run_id)
+                work.cancel()
+                await asyncio.gather(work, return_exceptions=True)
+            else:
+                await work
+        except asyncio.CancelledError:
+            work.cancel()
+            await asyncio.gather(work, return_exceptions=True)
+            raise
+        finally:
+            elapsed = asyncio.get_running_loop().time() - segment_started
+            await self._await_cleanup(
+                self._finalize_resume_segment(
+                    decision.run.owner_id,
+                    run_id,
+                    elapsed,
+                )
+            )
+
+    async def _resume_tool_work(self, decision: AgentToolDecision) -> None:
         try:
             decision.run = await self.repository.renew_run_execution(
                 decision.run.owner_id,
@@ -634,20 +705,59 @@ class AgentRuntime:
                     raise
                 await self._execute_tool_call(decision.run, decision.tool_call)
             latest = await self.repository.get_run(decision.run.owner_id, decision.run.response.id)
-            await self._execute(latest, manage_lease=False)
+            await self._execute(latest, manage_lease=False, manage_budget=False)
         except asyncio.CancelledError:
             if decision.run.response.id in self._lease_lost:
                 return
+            if decision.run.response.id in self._budget_timed_out:
+                current_call = await self.repository.get_tool_call(
+                    decision.run.owner_id, decision.tool_call.response.id
+                )
+                if current_call.response.status in {
+                    AgentToolCallStatus.APPROVED,
+                    AgentToolCallStatus.RUNNING,
+                }:
+                    interruption_result = await asyncio.shield(
+                        self._tool_interruption_result(
+                            decision.run.owner_id,
+                            current_call,
+                            "AGENT_RUN_TIMEOUT",
+                        )
+                    )
+                    await asyncio.shield(
+                        self.repository.finish_tool(
+                            decision.run.owner_id,
+                            current_call.response.id,
+                            status=AgentToolCallStatus.FAILED,
+                            result=interruption_result,
+                            error_code="AGENT_RUN_TIMEOUT",
+                            error_message="The Agent run exhausted its active-time budget.",
+                            executor_id=self.executor_id,
+                        )
+                    )
+                await asyncio.shield(
+                    self._mark_failed(
+                        decision.run,
+                        "AGENT_RUN_TIMEOUT",
+                        "The Agent run exhausted its active-time budget.",
+                        self.executor_id,
+                    )
+                )
+                return
             if self._shutting_down and decision.run.response.id not in self._user_cancelled:
+                interruption_result = await asyncio.shield(
+                    self._tool_interruption_result(
+                        decision.run.owner_id,
+                        decision.tool_call,
+                        "AGENT_TOOL_RECOVERY_REQUIRED",
+                    )
+                )
                 await asyncio.shield(
                     self.repository.finish_tool(
                         decision.run.owner_id,
                         decision.tool_call.response.id,
                         status=AgentToolCallStatus.FAILED,
-                        result={
-                            "ok": False,
-                            "error": {"code": "AGENT_TOOL_RECOVERY_REQUIRED"},
-                        },
+                        result=interruption_result,
                         error_code="AGENT_TOOL_RECOVERY_REQUIRED",
                         error_message=(
                             "The interrupted tool was not replayed because its outcome is unknown."
@@ -664,12 +774,19 @@ class AgentRuntime:
                     )
                 )
             else:
+                interruption_result = await asyncio.shield(
+                    self._tool_interruption_result(
+                        decision.run.owner_id,
+                        decision.tool_call,
+                        "AGENT_TOOL_CANCELLED",
+                    )
+                )
                 await asyncio.shield(
                     self.repository.finish_tool(
                         decision.run.owner_id,
                         decision.tool_call.response.id,
                         status=AgentToolCallStatus.FAILED,
-                        result={"ok": False, "error": {"code": "AGENT_TOOL_CANCELLED"}},
+                        result=interruption_result,
                         error_code="AGENT_TOOL_CANCELLED",
                         error_message="The Agent tool was cancelled by the user.",
                         executor_id=self.executor_id,
@@ -695,11 +812,14 @@ class AgentRuntime:
         finally:
             renewal.cancel()
             await asyncio.gather(renewal, return_exceptions=True)
-            await self._release_execution_if_settled(
-                decision.run.owner_id, decision.run.response.id
-            )
 
-    async def _execute(self, run: StoredAgentRun, *, manage_lease: bool = True) -> None:
+    async def _execute(
+        self,
+        run: StoredAgentRun,
+        *,
+        manage_lease: bool = True,
+        manage_budget: bool = True,
+    ) -> None:
         if manage_lease:
             try:
                 run = await self.repository.renew_run_execution(
@@ -710,6 +830,15 @@ class AgentRuntime:
                 )
             except (AgentExecutionOwned, KeyError):
                 return
+        segment_started = asyncio.get_running_loop().time()
+        remaining = (
+            max(
+                0.0,
+                self.settings.agent_max_run_seconds - run.active_duration_seconds,
+            )
+            if manage_budget
+            else None
+        )
         current_task = asyncio.current_task()
         assert current_task is not None
         renewal = (
@@ -718,10 +847,13 @@ class AgentRuntime:
             else None
         )
         try:
-            async with asyncio.timeout(self.settings.agent_max_run_seconds):
+            async with asyncio.timeout(remaining):
                 await self._run_loop(run)
         except asyncio.CancelledError:
             if run.response.id in self._lease_lost:
+                return
+            latest = await self.repository.get_run(run.owner_id, run.response.id)
+            if latest.response.status is AgentRunStatus.WAITING_APPROVAL:
                 return
             if self._shutting_down and run.response.id not in self._user_cancelled:
                 await asyncio.shield(
@@ -792,10 +924,108 @@ class AgentRuntime:
                 self.executor_id,
             )
         finally:
-            if renewal is not None:
-                renewal.cancel()
-                await asyncio.gather(renewal, return_exceptions=True)
-                await self._release_execution_if_settled(run.owner_id, run.response.id)
+            elapsed = asyncio.get_running_loop().time() - segment_started
+            await self._await_cleanup(
+                self._finalize_execute_segment(
+                    run.owner_id,
+                    run.response.id,
+                    elapsed,
+                    renewal,
+                    manage_budget=manage_budget,
+                )
+            )
+
+    async def _await_cleanup(self, cleanup: Awaitable[None]) -> None:
+        task = asyncio.create_task(cleanup)
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            await task
+            raise
+
+    async def _finalize_resume_segment(self, owner_id: str, run_id: str, elapsed: float) -> None:
+        with suppress(AgentExecutionOwned, KeyError):
+            await self.repository.record_active_seconds(
+                owner_id,
+                run_id,
+                self.executor_id,
+                elapsed,
+            )
+        await self.repository.release_run_execution(owner_id, run_id, self.executor_id)
+        self._budget_timed_out.discard(run_id)
+
+    async def _finalize_execute_segment(
+        self,
+        owner_id: str,
+        run_id: str,
+        elapsed: float,
+        renewal: asyncio.Task[None] | None,
+        *,
+        manage_budget: bool,
+    ) -> None:
+        if manage_budget:
+            with suppress(AgentExecutionOwned, KeyError):
+                await self.repository.record_active_seconds(
+                    owner_id,
+                    run_id,
+                    self.executor_id,
+                    elapsed,
+                )
+        if renewal is not None:
+            renewal.cancel()
+            await asyncio.gather(renewal, return_exceptions=True)
+            await self._release_execution_if_settled(owner_id, run_id)
+
+    async def _tool_interruption_result(
+        self,
+        owner_id: str,
+        tool_call: StoredAgentToolCall,
+        error_code: str,
+    ) -> dict[str, object]:
+        result: dict[str, object] = {
+            "ok": False,
+            "error": {"code": error_code},
+        }
+        if self.artifacts is None or tool_call.response.tool_name != "generate_reference_image":
+            return result
+        await self.artifacts.cleanup_unregistered_generated_images(owner_id, tool_call.response.id)
+        recovered_assets = await self.artifacts.list_generated_images(
+            owner_id, tool_call.response.id
+        )
+        if recovered_assets:
+            result["assets"] = [_asset_tool_snapshot(asset) for asset in recovered_assets]
+            result["partial"] = True
+        return result
+
+    async def _provider_image_inputs(self, run: StoredAgentRun) -> list[str]:
+        if not self.image_input_available or self.artifacts is None:
+            return []
+        image_asset_ids = {
+            item.get("id")
+            for item in run.response.input_snapshot.get("assetMetadata", [])
+            if isinstance(item, dict) and item.get("type") == "image"
+        }
+        image_inputs: list[str] = []
+        for asset_id in run.response.input_snapshot.get("assetIds", []):
+            if not isinstance(asset_id, str) or asset_id not in image_asset_ids:
+                continue
+            try:
+                image_inputs.append(
+                    await self.artifacts.provider_image_data_url(
+                        run.owner_id,
+                        asset_id,
+                        max_bytes=self.settings.agent_max_image_bytes,
+                    )
+                )
+            except KeyError:
+                continue
+            except ValueError as exc:
+                raise AgentRuntimeError(
+                    "AGENT_IMAGE_INVALID",
+                    422,
+                    "An input image could not be validated safely.",
+                ) from exc
+        return image_inputs
 
     async def _finish_unstarted_tools(
         self, owner_id: str, run_id: str, error_code: str, error_message: str
@@ -838,7 +1068,6 @@ class AgentRuntime:
             )
             await self._notify(run.response.id)
         usage = run.response.usage
-        provider_event_count = 0
         while usage.provider_requests < self.settings.agent_max_turns:
             current = await self.repository.get_run(run.owner_id, run.response.id)
             if current.response.status is not AgentRunStatus.STREAMING:
@@ -858,11 +1087,23 @@ class AgentRuntime:
                 run.owner_id, run.response.thread_id, limit=20
             )
             next_request_count = usage.provider_requests + 1
+            image_inputs = await self._provider_image_inputs(run)
             request = ProviderRequest(
                 model=run.response.model,
                 instructions=SYSTEM_INSTRUCTIONS,
-                input_items=_provider_input(messages, run.response.input_snapshot, tool_calls),
-                tools=(self.tool_registry.provider_tools() if self.tools_enabled else []),
+                input_items=_provider_input(
+                    messages,
+                    run.response.input_snapshot,
+                    tool_calls,
+                    image_inputs,
+                ),
+                tools=(
+                    self.tool_registry.provider_tools(
+                        image_generation_available=self.image_generation_available
+                    )
+                    if self.tools_enabled
+                    else []
+                ),
                 reasoning_effort=self.settings.agent_reasoning_effort,
                 max_output_tokens=self.settings.agent_max_output_tokens,
                 request_id=f"{run.response.id}-turn-{next_request_count}",
@@ -874,11 +1115,17 @@ class AgentRuntime:
             proposals: list[ProviderEvent] = []
             turn_usage = AgentUsage(providerRequests=1)
             async for event in self.provider.stream_response(request):
-                provider_event_count += 1
-                if provider_event_count > self.settings.agent_max_events_per_run:
+                try:
+                    run = await self.repository.consume_provider_event(
+                        run.owner_id,
+                        run.response.id,
+                        self.executor_id,
+                        self.settings.agent_max_events_per_run,
+                    )
+                except ValueError:
                     raise AgentRuntimeError(
                         "AGENT_OUTPUT_INVALID", 422, "Agent event limit exceeded."
-                    )
+                    ) from None
                 if event.response_id:
                     run.response = run.response.model_copy(
                         update={"provider_response_id": event.response_id}
@@ -997,6 +1244,12 @@ class AgentRuntime:
             raise AgentRuntimeError(
                 "AGENT_TOOL_NOT_ALLOWED", 422, "The proposed Agent tool is not allowed."
             ) from None
+        if definition.requires_image_generation and not self.image_generation_available:
+            raise AgentRuntimeError(
+                "AGENT_IMAGE_NOT_SUPPORTED",
+                503,
+                "Agent image generation is unavailable.",
+            )
         try:
             validated = self.tool_registry.validate_arguments(name, arguments)
         except ValidationError:
@@ -1130,8 +1383,40 @@ class AgentRuntime:
         try:
             result = await self.tool_registry.execute(
                 tool_call.response.tool_name,
-                ToolExecutionContext(run.owner_id, run, self.studio),
+                ToolExecutionContext(
+                    run.owner_id,
+                    run,
+                    self.studio,
+                    tool_call_id=tool_call.response.id,
+                    provider=self.provider,
+                    artifacts=self.artifacts,
+                    image_model=self.settings.agent_image_model or run.response.model,
+                    max_image_bytes=self.settings.agent_max_image_bytes,
+                    image_input_available=self.image_input_available,
+                    ensure_execution_owned=partial(
+                        self._ensure_execution_owned,
+                        run.owner_id,
+                        run.response.id,
+                    ),
+                    consume_provider_events=partial(
+                        self._consume_provider_events,
+                        run.owner_id,
+                        run.response.id,
+                    ),
+                ),
                 tool_call.response.arguments,
+            )
+        except AgentExecutionOwned:
+            raise
+        except AgentProviderError as exc:
+            stored = await self.repository.finish_tool(
+                run.owner_id,
+                tool_call.response.id,
+                status=AgentToolCallStatus.FAILED,
+                result={"ok": False, "error": {"code": exc.code.value}},
+                error_code=exc.code.value,
+                error_message=_provider_message(exc.code),
+                executor_id=self.executor_id,
             )
         except KeyError:
             stored = await self.repository.finish_tool(
@@ -1143,7 +1428,20 @@ class AgentRuntime:
                 error_message="The requested resource was not found.",
                 executor_id=self.executor_id,
             )
-        except (RuntimeError, ValidationError, ValueError):
+        except RuntimeError as exc:
+            error_code = str(exc)
+            if not error_code.startswith("AGENT_") or len(error_code) > 100:
+                error_code = "AGENT_TOOL_FAILED"
+            stored = await self.repository.finish_tool(
+                run.owner_id,
+                tool_call.response.id,
+                status=AgentToolCallStatus.FAILED,
+                result={"ok": False, "error": {"code": error_code}},
+                error_code=error_code,
+                error_message="The Agent tool failed safely.",
+                executor_id=self.executor_id,
+            )
+        except (ValidationError, ValueError):
             stored = await self.repository.finish_tool(
                 run.owner_id,
                 tool_call.response.id,
@@ -1315,6 +1613,7 @@ def _provider_input(
     messages,
     snapshot: dict[str, object],
     tool_calls: list[StoredAgentToolCall],
+    image_inputs: list[str] | None = None,
 ) -> list[dict[str, object]]:
     items: list[dict[str, object]] = []
     for index, message in enumerate(messages):
@@ -1330,19 +1629,22 @@ def _provider_input(
                 ensure_ascii=False,
                 separators=(",", ":"),
             )
+        content: list[dict[str, object]] = [
+            {
+                "type": (
+                    "output_text" if message.role is AgentMessageRole.ASSISTANT else "input_text"
+                ),
+                "text": text,
+            }
+        ]
+        if index == len(messages) - 1 and message.role is AgentMessageRole.USER:
+            content.extend(
+                {"type": "input_image", "image_url": image_url} for image_url in image_inputs or []
+            )
         items.append(
             {
                 "role": "assistant" if message.role is AgentMessageRole.ASSISTANT else "user",
-                "content": [
-                    {
-                        "type": (
-                            "output_text"
-                            if message.role is AgentMessageRole.ASSISTANT
-                            else "input_text"
-                        ),
-                        "text": text,
-                    }
-                ],
+                "content": content,
             }
         )
     for tool_call in tool_calls:
@@ -1386,6 +1688,19 @@ def _provider_input(
             }
         )
     return items
+
+
+def _asset_tool_snapshot(asset: AssetResponse) -> dict[str, object]:
+    return {
+        "id": asset.id,
+        "type": asset.type,
+        "title": asset.title[:200],
+        "mediaType": asset.media_type,
+        "sizeBytes": asset.size_bytes,
+        "width": asset.width,
+        "height": asset.height,
+        "createdAt": asset.created_at.isoformat(),
+    }
 
 
 def _add_usage(current: AgentUsage, turn: AgentUsage) -> AgentUsage:

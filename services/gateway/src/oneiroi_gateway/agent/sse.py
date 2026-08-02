@@ -11,16 +11,19 @@ class ServerSentEvent:
     retry_ms: int | None = None
 
 
-async def iter_sse_events(chunks: AsyncIterable[bytes]) -> AsyncIterator[ServerSentEvent]:
+async def iter_sse_events(
+    chunks: AsyncIterable[bytes], *, max_event_chars: int = 32 * 1024 * 1024
+) -> AsyncIterator[ServerSentEvent]:
     decoder = codecs.getincrementaldecoder("utf-8")("strict")
     text_buffer = ""
     data_lines: list[str] = []
     event_type: str | None = None
     event_id: str | None = None
     retry_ms: int | None = None
+    event_chars = 0
 
     def consume_line(line: str) -> ServerSentEvent | None:
-        nonlocal data_lines, event_type, event_id, retry_ms
+        nonlocal data_lines, event_type, event_id, retry_ms, event_chars
         if line == "":
             if not data_lines and event_type is None and event_id is None and retry_ms is None:
                 return None
@@ -34,6 +37,7 @@ async def iter_sse_events(chunks: AsyncIterable[bytes]) -> AsyncIterator[ServerS
             event_type = None
             event_id = None
             retry_ms = None
+            event_chars = 0
             return event
         if line.startswith(":"):
             return None
@@ -41,6 +45,9 @@ async def iter_sse_events(chunks: AsyncIterable[bytes]) -> AsyncIterator[ServerS
         if separator and value.startswith(" "):
             value = value[1:]
         if field == "data":
+            event_chars += len(value)
+            if event_chars > max_event_chars:
+                raise ValueError("SSE_EVENT_TOO_LARGE")
             data_lines.append(value)
         elif field == "event":
             event_type = value
@@ -73,6 +80,8 @@ async def iter_sse_events(chunks: AsyncIterable[bytes]) -> AsyncIterator[ServerS
         while (line := pop_line()) is not None:
             if event := consume_line(line):
                 yield event
+        if len(text_buffer) + event_chars > max_event_chars:
+            raise ValueError("SSE_EVENT_TOO_LARGE")
 
     text_buffer += decoder.decode(b"", final=True)
     while (line := pop_line(final=True)) is not None:

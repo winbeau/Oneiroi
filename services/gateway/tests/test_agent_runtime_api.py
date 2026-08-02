@@ -16,10 +16,25 @@ from oneiroi_common.agent import (
 from oneiroi_gateway.agent.fake import FakeAgentProvider
 from oneiroi_gateway.agent.protocol import ProviderEvent, ProviderEventType
 from oneiroi_gateway.agent.runtime import AgentRuntime
-from oneiroi_gateway.main import create_app
+from oneiroi_gateway.main import create_app as create_gateway_app
 from oneiroi_gateway.repositories.agent import InMemoryAgentRepository, StoredAgentRun
 from oneiroi_gateway.repositories.studio import InMemoryStudioRepository
 from oneiroi_gateway.settings import GatewaySettings
+
+
+def create_app(settings: GatewaySettings, **kwargs):
+    return create_gateway_app(settings, allow_unprobed_agent_provider_for_tests=True, **kwargs)
+
+
+def agent_settings(**overrides: object) -> GatewaySettings:
+    values: dict[str, object] = {
+        "_env_file": None,
+        "agent_enabled": True,
+        "agent_api_key": "test-key",
+        "agent_base_url": "https://provider.invalid/v1",
+    }
+    values.update(overrides)
+    return GatewaySettings(**values)
 
 
 class CancellingRaceRepository(InMemoryAgentRepository):
@@ -126,7 +141,7 @@ async def test_agent_run_persists_thread_messages_proposal_and_replay() -> None:
             }
         )
     )
-    app = create_app(GatewaySettings(_env_file=None), agent_provider=provider)
+    app = create_app(agent_settings(), agent_provider=provider)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         headers = {"X-Oneiroi-User": "owner-a"}
         conversation = await client.post(
@@ -232,7 +247,7 @@ async def test_agent_run_persists_thread_messages_proposal_and_replay() -> None:
 @pytest.mark.asyncio
 async def test_agent_cancel_and_invalid_output_have_explicit_terminal_states() -> None:
     slow_provider = FakeAgentProvider(events=response_events({"text": "late"}), delay_seconds=1)
-    app = create_app(GatewaySettings(_env_file=None), agent_provider=slow_provider)
+    app = create_app(agent_settings(), agent_provider=slow_provider)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         headers = {"X-Oneiroi-User": "owner-a"}
         conversation = await client.post(
@@ -262,7 +277,7 @@ async def test_agent_cancel_and_invalid_output_have_explicit_terminal_states() -
             ProviderEvent(event_type=ProviderEventType.RESPONSE_COMPLETED),
         ]
     )
-    app = create_app(GatewaySettings(_env_file=None), agent_provider=invalid_provider)
+    app = create_app(agent_settings(), agent_provider=invalid_provider)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         headers = {"X-Oneiroi-User": "owner-a"}
         conversation = await client.post(
@@ -294,7 +309,7 @@ async def test_agent_cancel_race_finishes_cancelled_without_failure(race_on: str
         repository,
         studio,
         FakeAgentProvider(events=response_events({"text": "safe"})),
-        GatewaySettings(_env_file=None),
+        agent_settings(),
     )
     created = await runtime.create_run(
         "owner-a",
@@ -329,7 +344,7 @@ async def test_agent_run_fails_closed_when_provider_event_limit_is_exceeded() ->
         ]
     )
     app = create_app(
-        GatewaySettings(_env_file=None, agent_max_events_per_run=10),
+        agent_settings(agent_max_events_per_run=10),
         agent_provider=provider,
     )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

@@ -5,6 +5,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     DateTime,
+    Float,
     ForeignKeyConstraint,
     Index,
     Integer,
@@ -114,6 +115,8 @@ class AgentRunModel(Base):
     execution_lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    active_duration_seconds: Mapped[float] = mapped_column(Float, default=0)
+    provider_event_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class AgentMessageModel(Base):

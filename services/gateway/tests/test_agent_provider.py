@@ -9,6 +9,7 @@ from oneiroi_gateway.agent.fake import FakeAgentProvider
 from oneiroi_gateway.agent.openai_responses import OpenAIResponsesProvider
 from oneiroi_gateway.agent.protocol import (
     AgentProviderError,
+    GeneratedImage,
     ImageGenerationRequest,
     ProviderErrorCode,
     ProviderEventType,
@@ -384,7 +385,10 @@ async def test_http_errors_are_mapped_retried_before_stream_and_redacted() -> No
 
 @pytest.mark.asyncio
 async def test_image_success_is_normalized_without_exposing_raw_validation_errors() -> None:
-    async def handler(_request: httpx.Request) -> httpx.Response:
+    captured: dict[str, object] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
         return httpx.Response(200, content=fixture("image.sse"))
 
     adapter = provider(handler)
@@ -392,12 +396,75 @@ async def test_image_success_is_normalized_without_exposing_raw_validation_error
         ImageGenerationRequest(
             model="image-model",
             prompt="gray square",
+            negativePrompt="text and watermark",
             request_id="image-success",
+            size="1024x1024",
+            referenceImages=["data:image/png;base64,aGVsbG8="],
         )
     )
     await adapter.close()
     assert result.images[0].base64_data == "iVBORw0KGgo="
     assert result.response_id == "resp-image"
+    assert captured["tools"] == [{"type": "image_generation", "size": "1024x1024"}]
+    assert "Avoid: text and watermark" in str(captured["input"])
+    assert "data:image/png;base64,aGVsbG8=" in str(captured["input"])
+
+
+@pytest.mark.asyncio
+async def test_generated_image_resolution_is_bounded_and_origin_locked() -> None:
+    tiny_png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x04\x00\x00\x00\xb5\x1c\x0c\x02\x00\x00\x00\x0bIDATx\xdac\x64\xf8"
+        b"\x0f\x00\x01\x05\x01\x01'\x18\xe3f\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.path.endswith("/redirect"):
+            return httpx.Response(302, headers={"Location": "http://127.0.0.1/private"})
+        return httpx.Response(200, headers={"Content-Type": "image/png"}, content=tiny_png)
+
+    adapter = provider(handler)
+    inline = await adapter.resolve_generated_image(
+        GeneratedImage(
+            base64Data=(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8A"
+                "AQUBAScY42YAAAAASUVORK5CYII="
+            ),
+            mediaType="image/png",
+        ),
+        max_bytes=1024,
+    )
+    assert inline.content == tiny_png
+    assert requests == []
+
+    file_result = await adapter.resolve_generated_image(
+        GeneratedImage(fileId="file-safe_1"), max_bytes=1024
+    )
+    assert file_result.content == tiny_png
+    assert requests[-1] == "https://provider.example/v1/files/file-safe_1/content"
+
+    url_result = await adapter.resolve_generated_image(
+        GeneratedImage(url="https://provider.example/v1/generated/1"), max_bytes=1024
+    )
+    assert url_result.media_type == "image/png"
+    assert requests[-1] == "https://provider.example/v1/generated/1"
+
+    with pytest.raises(AgentProviderError) as external:
+        await adapter.resolve_generated_image(
+            GeneratedImage(url="https://cdn.example/image.png"), max_bytes=1024
+        )
+    assert external.value.code is ProviderErrorCode.OUTPUT_INVALID
+    with pytest.raises(AgentProviderError) as redirect:
+        await adapter.resolve_generated_image(
+            GeneratedImage(url="https://provider.example/v1/redirect"), max_bytes=1024
+        )
+    assert redirect.value.code is ProviderErrorCode.OUTPUT_INVALID
+    with pytest.raises(AgentProviderError) as oversized:
+        await adapter.resolve_generated_image(GeneratedImage(fileId="file-safe_1"), max_bytes=16)
+    assert oversized.value.code is ProviderErrorCode.OUTPUT_INVALID
+    await adapter.close()
 
 
 @pytest.mark.asyncio

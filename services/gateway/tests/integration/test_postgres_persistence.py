@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import os
 import subprocess
 from datetime import UTC, datetime, timedelta
@@ -23,6 +24,7 @@ from oneiroi_common.compute import (
     GpuInfo,
     GpuState,
 )
+from oneiroi_common.studio import GeneratedImageProvenance
 from oneiroi_gateway.agent.fake import FakeAgentProvider
 from oneiroi_gateway.agent.protocol import ProviderEvent, ProviderEventType
 from oneiroi_gateway.agent.registry import (
@@ -32,7 +34,7 @@ from oneiroi_gateway.agent.registry import (
 )
 from oneiroi_gateway.agent.runtime import AgentRuntime
 from oneiroi_gateway.db.session import create_engine, create_session_factory
-from oneiroi_gateway.main import create_app
+from oneiroi_gateway.main import create_app as create_gateway_app
 from oneiroi_gateway.redis.leases import InMemoryLeaseStore
 from oneiroi_gateway.repositories.agent import (
     AgentExecutionOwned,
@@ -42,10 +44,16 @@ from oneiroi_gateway.repositories.agent import (
 from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
 from oneiroi_gateway.repositories.sql_agent import SqlAgentRepository
 from oneiroi_gateway.repositories.sql_studio import SqlStudioRepository
+from oneiroi_gateway.services.artifact_service import ArtifactService
 from oneiroi_gateway.services.compute_sessions import ComputeSessionService, RecordingComputeBackend
 from oneiroi_gateway.services.gpu_inventory import GpuInventoryService, InMemoryInventoryProvider
 from oneiroi_gateway.services.job_execution import FakeJobExecutor
 from oneiroi_gateway.settings import GatewaySettings
+
+
+def create_app(settings: GatewaySettings, **kwargs):
+    return create_gateway_app(settings, allow_unprobed_agent_provider_for_tests=True, **kwargs)
+
 
 pytestmark = pytest.mark.skipif(
     os.getenv("ONEIROI_TEST_POSTGRES") != "1",
@@ -584,6 +592,9 @@ async def test_agent_thread_run_messages_and_events_survive_gateway_recreation(
         persistence_enabled=True,
         database_url=DATABASE_URL,
         storage_root=tmp_path,
+        agent_enabled=True,
+        agent_api_key="test-key",
+        agent_base_url="https://provider.invalid/v1",
     )
     inventory, sessions = components()
     first_app = create_app(
@@ -658,6 +669,49 @@ async def test_agent_thread_run_messages_and_events_survive_gateway_recreation(
             await connection.execute(text(statement), {"owner": owner})
     await second_app.state.agent_runtime.close()
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_generated_image_provenance_survives_gateway_recreation(tmp_path: Path) -> None:
+    owner = f"agent-image-{uuid4().hex}"
+    engine = create_engine(DATABASE_URL)
+    repository = SqlStudioRepository(create_session_factory(engine))
+    artifacts = ArtifactService(repository, tmp_path, max_upload_bytes=1024 * 1024)
+    provenance = GeneratedImageProvenance(
+        agentRunId=f"agent-run-{uuid4().hex}",
+        toolCallId=f"agent-tool-{uuid4().hex}",
+        outputIndex=0,
+        provider="fake",
+        model="fake-image-model",
+        promptSha256="e" * 64,
+        purpose="first-frame",
+        ratio="16:9",
+        providerResponseId="fake-image-response",
+        createdAt=datetime.now(UTC),
+    )
+    content = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8A"
+        "AQUBAScY42YAAAAASUVORK5CYII="
+    )
+    created = await artifacts.create_generated_image(
+        owner,
+        content,
+        "Generated frame",
+        provenance,
+        max_bytes=1024 * 1024,
+    )
+    await engine.dispose()
+
+    recreated_engine = create_engine(DATABASE_URL)
+    recreated_repository = SqlStudioRepository(create_session_factory(recreated_engine))
+    stored = await recreated_repository.get_asset(owner, created.id)
+    assert stored.response.provenance == provenance
+    assert stored.storage_path.read_bytes().startswith(b"\x89PNG")
+    recreated_artifacts = ArtifactService(
+        recreated_repository, tmp_path, max_upload_bytes=1024 * 1024
+    )
+    await recreated_artifacts.delete_asset(owner, created.id)
+    await recreated_engine.dispose()
 
 
 @pytest.mark.asyncio

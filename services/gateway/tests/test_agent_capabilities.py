@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 from oneiroi_common.agent import AgentProbeRecord, CapabilitySupport
 from oneiroi_gateway.agent.endpoint import provider_endpoint_hash
+from oneiroi_gateway.agent.fake import FakeAgentProvider
 from oneiroi_gateway.main import create_app
 from oneiroi_gateway.services.agent_capabilities import AgentCapabilityService
 from oneiroi_gateway.settings import GatewaySettings
@@ -112,6 +113,39 @@ def test_probe_controls_image_capabilities(tmp_path: Path) -> None:
     assert enabled_images.image_generation is True
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("agent_enabled", [False, True])
+async def test_injected_provider_cannot_bypass_default_off_or_probe(
+    agent_enabled: bool,
+) -> None:
+    provider = FakeAgentProvider()
+    configured = settings(
+        agent_enabled=agent_enabled,
+        agent_api_key="secret" if agent_enabled else None,
+        agent_base_url="https://provider.example/v1" if agent_enabled else "",
+    )
+    app = create_app(configured, agent_provider=provider)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        conversation = await client.post(
+            "/v1/conversations",
+            headers={"X-Oneiroi-User": "owner-a"},
+            json={"title": "Provider injection boundary"},
+        )
+        response = await client.post(
+            "/v1/agent/runs",
+            headers={"X-Oneiroi-User": "owner-a", "Idempotency-Key": "injection-boundary"},
+            json={
+                "conversationId": conversation.json()["id"],
+                "message": "must not reach provider",
+                "draftSnapshot": {"prompt": "lake"},
+            },
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "AGENT_NOT_CONFIGURED"
+    assert provider.requests == []
+    await app.state.agent_runtime.close()
+
+
 def test_probe_and_feature_flag_control_safe_tool_capabilities(tmp_path: Path) -> None:
     record_path = tmp_path / "agent-capabilities.json"
     write_record(record_path)
@@ -136,6 +170,22 @@ def test_probe_and_feature_flag_control_safe_tool_capabilities(tmp_path: Path) -
     assert response.max_turns == 8
     assert response.max_tool_calls == 12
     assert response.max_approvals == 3
+
+    image_response = AgentCapabilityService(
+        settings(
+            agent_enabled=True,
+            agent_api_key="secret",
+            agent_base_url="https://provider.example/v1",
+            agent_capability_file=record_path,
+            agent_tools_enabled=True,
+            agent_image_enabled=True,
+        )
+    ).get()
+    image_tool = next(
+        tool for tool in image_response.tools if tool.name == "generate_reference_image"
+    )
+    assert image_tool.risk.value == "costly"
+    assert image_tool.requires_approval is True
 
 
 @pytest.mark.asyncio

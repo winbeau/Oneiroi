@@ -67,6 +67,9 @@ class GatewaySettings(BaseSettings):
     agent_execution_lease_renew_seconds: int = Field(default=10, ge=1, le=60)
     agent_max_input_images: int = Field(default=4, ge=0, le=8)
     agent_max_image_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
+    agent_max_image_pixels: int = Field(default=33_554_432, ge=1, le=100_000_000)
+    agent_max_image_edge: int = Field(default=8_192, ge=64, le=16_384)
+    agent_image_tool_timeout_seconds: float = Field(default=180, gt=0, le=1_800)
     agent_max_retries: int = Field(default=2, ge=0, le=5)
     agent_max_retry_delay_seconds: float = Field(default=4, ge=0, le=60)
     agent_capability_file: Path | None = None

@@ -350,6 +350,54 @@ class SqlAgentRepository:
                 await session.flush()
             return self._stored_run(row)
 
+    async def record_active_seconds(
+        self,
+        owner_id: str,
+        run_id: str,
+        executor_id: str,
+        seconds: float,
+    ) -> StoredAgentRun:
+        async with self.sessions() as session, session.begin():
+            row = await session.scalar(
+                select(AgentRunModel)
+                .where(
+                    AgentRunModel.id == run_id,
+                    AgentRunModel.owner_id == owner_id,
+                )
+                .with_for_update()
+            )
+            if row is None:
+                raise KeyError(run_id)
+            self._assert_execution_owned(row, executor_id)
+            row.active_duration_seconds += max(0.0, seconds)
+            await session.flush()
+            return self._stored_run(row)
+
+    async def consume_provider_event(
+        self,
+        owner_id: str,
+        run_id: str,
+        executor_id: str,
+        maximum: int,
+    ) -> StoredAgentRun:
+        async with self.sessions() as session, session.begin():
+            row = await session.scalar(
+                select(AgentRunModel)
+                .where(
+                    AgentRunModel.id == run_id,
+                    AgentRunModel.owner_id == owner_id,
+                )
+                .with_for_update()
+            )
+            if row is None:
+                raise KeyError(run_id)
+            self._assert_execution_owned(row, executor_id)
+            if row.provider_event_count >= maximum:
+                raise ValueError("AGENT_EVENT_LIMIT_EXCEEDED")
+            row.provider_event_count += 1
+            await session.flush()
+            return self._stored_run(row)
+
     async def transition_run(
         self,
         run: StoredAgentRun,
@@ -980,6 +1028,8 @@ class SqlAgentRepository:
             finished_at=response.finished_at,
             executor_id=run.executor_id,
             execution_lease_expires_at=run.execution_lease_expires_at,
+            active_duration_seconds=run.active_duration_seconds,
+            provider_event_count=run.provider_event_count,
         )
 
     @staticmethod
@@ -1012,6 +1062,8 @@ class SqlAgentRepository:
             request_hash=row.request_hash,
             executor_id=row.executor_id,
             execution_lease_expires_at=row.execution_lease_expires_at,
+            active_duration_seconds=row.active_duration_seconds,
+            provider_event_count=row.provider_event_count,
         )
 
     @staticmethod

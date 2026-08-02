@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from oneiroi_gateway.agent.sse import iter_sse_events
 
 
@@ -41,6 +43,20 @@ def test_sse_parser_accepts_standalone_carriage_return_line_endings() -> None:
         assert len(events) == 1
         assert events[0].event_id == "cr-event"
         assert events[0].data == "first\nsecond"
+
+    asyncio.run(scenario())
+
+
+def test_sse_parser_rejects_an_oversized_single_event() -> None:
+    async def scenario() -> None:
+        with pytest.raises(ValueError, match="SSE_EVENT_TOO_LARGE"):
+            _ = [
+                event
+                async for event in iter_sse_events(
+                    chunks(b"data: " + (b"x" * 32), [3, 5, 7]),
+                    max_event_chars=16,
+                )
+            ]
 
     asyncio.run(scenario())
 

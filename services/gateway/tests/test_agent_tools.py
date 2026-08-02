@@ -19,7 +19,7 @@ from oneiroi_gateway.agent.fake import FakeAgentProvider
 from oneiroi_gateway.agent.protocol import ProviderEvent, ProviderEventType
 from oneiroi_gateway.agent.registry import RegisteredTool, ToolExecutionContext, ToolRegistry
 from oneiroi_gateway.agent.runtime import AgentRuntime
-from oneiroi_gateway.main import create_app
+from oneiroi_gateway.main import create_app as create_gateway_app
 from oneiroi_gateway.repositories.agent import (
     InMemoryAgentRepository,
     StoredAgentApproval,
@@ -28,6 +28,10 @@ from oneiroi_gateway.repositories.agent import (
 )
 from oneiroi_gateway.repositories.studio import InMemoryStudioRepository, StoredAsset
 from oneiroi_gateway.settings import GatewaySettings
+
+
+def create_app(settings: GatewaySettings, **kwargs: Any):
+    return create_gateway_app(settings, allow_unprobed_agent_provider_for_tests=True, **kwargs)
 
 
 def tool_settings(**overrides: Any) -> GatewaySettings:
@@ -362,6 +366,59 @@ async def test_turn_and_tool_call_budgets_fail_predictably() -> None:
     await tool_app.state.agent_runtime.close()
 
 
+@pytest.mark.asyncio
+async def test_provider_event_budget_is_cumulative_across_tool_continuations() -> None:
+    provider = FakeAgentProvider(
+        event_batches=[
+            tool_turn(
+                "get_creation_context",
+                "call-event-budget",
+                {"conversationId": "conversation-placeholder"},
+            ),
+            [
+                ProviderEvent(event_type=ProviderEventType.RESPONSE_STARTED),
+                *[
+                    ProviderEvent(
+                        event_type=ProviderEventType.TEXT_DELTA,
+                        data={"delta": "x"},
+                    )
+                    for _ in range(8)
+                ],
+                ProviderEvent(event_type=ProviderEventType.RESPONSE_COMPLETED),
+            ],
+        ]
+    )
+    repository = InMemoryAgentRepository()
+    studio = InMemoryStudioRepository()
+    conversation = await studio.create_conversation("owner-a", "Event budget")
+    provider.event_batches[0] = tool_turn(
+        "get_creation_context",
+        "call-event-budget",
+        {"conversationId": conversation.id},
+    )
+    app = create_app(
+        tool_settings(agent_max_events_per_run=10),
+        agent_provider=provider,
+        agent_repository=repository,
+        repository=studio,
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            "/v1/agent/runs",
+            headers={"X-Oneiroi-User": "owner-a", "Idempotency-Key": "event-budget"},
+            json={
+                "conversationId": conversation.id,
+                "message": "consume event budget",
+                "draftSnapshot": {"prompt": "lake"},
+            },
+        )
+        failed = await wait_for_status(client, created.json()["id"], {"failed"})
+    assert failed["errorCode"] == "AGENT_OUTPUT_INVALID"
+    stored = await repository.get_run("owner-a", failed["id"])
+    assert stored.provider_event_count == 10
+    await app.state.agent_runtime.close()
+
+
 class CostlyArguments(ContractModel):
     value: str
 
@@ -369,6 +426,73 @@ class CostlyArguments(ContractModel):
 class CostlyResult(ContractModel):
     value: str
     executed: bool
+
+
+@pytest.mark.asyncio
+async def test_approved_tool_uses_remaining_cumulative_run_time_budget() -> None:
+    started = asyncio.Event()
+
+    async def handler(_context: ToolExecutionContext, arguments: CostlyArguments) -> CostlyResult:
+        started.set()
+        await asyncio.Event().wait()
+        return CostlyResult(value=arguments.value, executed=True)
+
+    registry = ToolRegistry(
+        [
+            RegisteredTool(
+                name="costly_probe",
+                version="1",
+                description="Test-only costly operation.",
+                input_model=CostlyArguments,
+                output_model=CostlyResult,
+                risk=AgentToolRisk.COSTLY,
+                max_calls_per_run=1,
+                timeout_seconds=5,
+                handler=handler,
+            )
+        ]
+    )
+    provider = FakeAgentProvider(
+        event_batches=[tool_turn("costly_probe", "call-time-budget", {"value": "fixed"})]
+    )
+    repository = InMemoryAgentRepository()
+    studio = InMemoryStudioRepository()
+    conversation = await studio.create_conversation("owner-a", "Time budget")
+    app = create_app(
+        tool_settings(
+            agent_max_run_seconds=0.05,
+            agent_stream_timeout_seconds=0.05,
+        ),
+        agent_provider=provider,
+        agent_repository=repository,
+        repository=studio,
+        agent_tool_registry=registry,
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        created = await client.post(
+            "/v1/agent/runs",
+            headers={"X-Oneiroi-User": "owner-a", "Idempotency-Key": "time-budget"},
+            json={
+                "conversationId": conversation.id,
+                "message": "approve a slow tool",
+                "draftSnapshot": {"prompt": "lake"},
+            },
+        )
+        waiting = await wait_for_status(client, created.json()["id"], {"waiting_approval"})
+        tool_call = (await repository.list_tool_calls("owner-a", waiting["id"]))[0]
+        await client.post(
+            f"/v1/agent/tool-calls/{tool_call.response.id}/approve",
+            headers={"X-Oneiroi-User": "owner-a"},
+            json={},
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
+        failed = await wait_for_status(client, waiting["id"], {"failed"})
+    stored_call = await repository.get_tool_call("owner-a", tool_call.response.id)
+    stored_run = await repository.get_run("owner-a", waiting["id"])
+    assert failed["errorCode"] == "AGENT_RUN_TIMEOUT"
+    assert stored_call.response.error_code == "AGENT_RUN_TIMEOUT"
+    assert stored_run.active_duration_seconds >= 0.04
+    await app.state.agent_runtime.close()
 
 
 @pytest.mark.asyncio

@@ -76,6 +76,8 @@ def create_app(
     agent_provider: AgentProvider | None = None,
     agent_runtime: AgentRuntime | None = None,
     agent_tool_registry: ToolRegistry | None = None,
+    artifact_service: ArtifactService | None = None,
+    allow_unprobed_agent_provider_for_tests: bool = False,
     repository: StudioRepository | None = None,
     job_dispatcher: JobDispatcher | None = None,
     job_executor: JobExecutor | None = None,
@@ -162,7 +164,9 @@ def create_app(
     capability_service = capability_service or CapabilityService(
         hq_installed=not app_settings.gpu_server_enabled
     )
-    agent_tool_registry = agent_tool_registry or builtin_tool_registry()
+    agent_tool_registry = agent_tool_registry or builtin_tool_registry(
+        image_timeout_seconds=app_settings.agent_image_tool_timeout_seconds
+    )
     agent_capability_service = agent_capability_service or AgentCapabilityService(
         app_settings, agent_tool_registry
     )
@@ -183,8 +187,22 @@ def create_app(
             if database_sessions is not None
             else InMemoryAgentRepository()
         )
+    artifacts = artifact_service or ArtifactService(
+        repository,
+        app_settings.storage_root,
+        max_upload_bytes=app_settings.max_upload_bytes,
+        max_image_pixels=app_settings.agent_max_image_pixels,
+        max_image_edge=app_settings.agent_max_image_edge,
+    )
     agent_provider_injected = agent_provider is not None
     agent_capabilities = agent_capability_service.get()
+    injected_provider_available = (
+        agent_provider_injected
+        and app_settings.agent_enabled
+        and (agent_capabilities.available or allow_unprobed_agent_provider_for_tests)
+    )
+    if agent_provider_injected and not injected_provider_available:
+        agent_provider = None
     if agent_provider is None and agent_capabilities.available:
         assert app_settings.agent_api_key is not None
         agent_provider = OpenAIResponsesProvider(
@@ -199,6 +217,7 @@ def create_app(
             max_run_seconds=app_settings.agent_max_run_seconds,
             max_retries=app_settings.agent_max_retries,
             max_retry_delay_seconds=app_settings.agent_max_retry_delay_seconds,
+            max_image_bytes=app_settings.agent_max_image_bytes,
         )
     agent_runtime = agent_runtime or AgentRuntime(
         agent_repository,
@@ -206,12 +225,29 @@ def create_app(
         agent_provider,
         app_settings,
         agent_tool_registry,
-        tools_available=(agent_provider_injected or agent_capabilities.function_tools),
-    )
-    artifacts = ArtifactService(
-        repository,
-        app_settings.storage_root,
-        max_upload_bytes=app_settings.max_upload_bytes,
+        tools_available=(
+            agent_capabilities.function_tools
+            or (injected_provider_available and allow_unprobed_agent_provider_for_tests)
+        ),
+        artifacts=artifacts,
+        image_input_available=(
+            agent_capabilities.image_input
+            or (
+                injected_provider_available
+                and allow_unprobed_agent_provider_for_tests
+                and bool(getattr(agent_provider, "image_input", False))
+                and app_settings.agent_image_input_enabled
+            )
+        ),
+        image_generation_available=(
+            agent_capabilities.image_generation
+            or (
+                injected_provider_available
+                and allow_unprobed_agent_provider_for_tests
+                and bool(getattr(agent_provider, "image_generation", False))
+                and app_settings.agent_image_enabled
+            )
+        ),
     )
     if job_dispatcher is None:
         if redis_streams is not None and (

@@ -77,6 +77,12 @@ class AgentCapabilityService:
             and settings.agent_tools_enabled
             and record.function_tools == CapabilitySupport.SUPPORTED
         )
+        image_generation_available = (
+            available
+            and settings.agent_image_enabled
+            and image_model_matches
+            and record.image_generation == CapabilitySupport.SUPPORTED
+        )
         return AgentCapabilitiesResponse(
             enabled=True,
             configured=True,
@@ -92,12 +98,7 @@ class AgentCapabilityService:
                 and settings.agent_image_input_enabled
                 and record.image_input == CapabilitySupport.SUPPORTED
             ),
-            image_generation=(
-                available
-                and settings.agent_image_enabled
-                and image_model_matches
-                and record.image_generation == CapabilitySupport.SUPPORTED
-            ),
+            image_generation=image_generation_available,
             usage=record.usage == CapabilitySupport.SUPPORTED,
             transports=list(record.transport),
             websocket_declared=record.websocket_declared,
@@ -110,7 +111,9 @@ class AgentCapabilityService:
                         risk=tool.risk,
                         requiresApproval=tool.requires_approval,
                     )
-                    for tool in self.tool_registry.definitions()
+                    for tool in self.tool_registry.definitions(
+                        image_generation_available=image_generation_available
+                    )
                 ]
                 if tools_enabled
                 else []
