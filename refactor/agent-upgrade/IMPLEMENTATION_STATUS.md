@@ -27,8 +27,8 @@ The independent worktree started clean on `gpt-agent` at the required starting c
 | Stage | State | Implementation commit | External blocker |
 |---|---|---|---|
 | A. Provider and configuration | implemented; real canary blocked | `340118be27cd3c4ec71b4bf73dae9fef994ed226` | rotated credential has not been injected into restricted Gateway runtime; real image model/return mode, rate-limit format, and WebSocket support are therefore not claimed |
-| B. Minimal Agent API and prompt assistant | implemented; commit pending | pending | real provider canary remains blocked; deterministic fake-provider implementation is complete |
-| C. Durable Agent runtime | implemented; commit pending | pending | production migration requires later release authorization; local PostgreSQL migration and persistence checks pass |
+| B. Minimal Agent API and prompt assistant | implemented | `f6840c4d816b0fa688f8056482f593dc3bccfc62` | real provider canary remains blocked; deterministic fake-provider implementation is complete |
+| C. Durable Agent runtime | implemented | `f6840c4d816b0fa688f8056482f593dc3bccfc62` | production migration requires later release authorization; local PostgreSQL migration and persistence checks pass |
 | D. Controlled tools and approval | pending | — | none for fake service tests |
 | E. Image generation and assetization | pending | — | real provider image capability remains blocked; fake/base64/file-ID/URL paths can proceed |
 | F. Frontend Agent experience and Job orchestration | pending | — | real video E2E requires a gpu-server Runner; fake Job orchestration can proceed |
@@ -90,7 +90,7 @@ Implemented:
 - OpenAPI and generated TypeScript DTO updates;
 - runtime, persistence, SSE, recovery, safety, validation, and rollback documentation in `docs/agent-runtime.md`.
 
-Quality evidence after Stages B/C implementation, before the stage commit:
+Quality evidence for Stages B/C implementation commit `f6840c4d816b0fa688f8056482f593dc3bccfc62`:
 
 | Check | Result |
 |---|---|
@@ -100,7 +100,7 @@ Quality evidence after Stages B/C implementation, before the stage commit:
 | PostgreSQL migration `downgrade 0001_dynamic_backend` then `upgrade head` | passed |
 | loopback PostgreSQL integration, including automated migration roundtrip | 5 passed |
 | `pnpm check` | passed |
-| OpenAPI generation | deterministic generated files updated; clean `pnpm check:api` rerun pending after the stage commit establishes the new baseline |
+| `pnpm check:api` | passed after the stage commit established the generated OpenAPI/TypeScript baseline |
 | Playwright | 13 passed, 1 skipped |
 | `git diff --check` and high-entropy credential scan | passed |
 
