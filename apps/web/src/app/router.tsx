@@ -30,6 +30,13 @@ export const router = createBrowserRouter([
           return { Component: AssetsPage };
         },
       },
+      {
+        path: "/compute",
+        lazy: async () => {
+          const { ComputePage } = await import("@/features/compute/compute-page");
+          return { Component: ComputePage };
+        },
+      },
     ],
   },
 ]);

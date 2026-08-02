@@ -2,11 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CircleUserRound,
   Clapperboard,
+  Cpu,
   Images,
   Lightbulb,
   LogOut,
-  MoonStar,
+  Moon,
   Settings,
+  Sparkle,
   Sparkles,
 } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
@@ -15,6 +17,8 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { LayoutPill } from "@/components/motion/layout-pill";
 import { PageTransition } from "@/components/motion/page-transition";
+import { ComputeSessionSync } from "@/features/compute/compute-session-sync";
+import { useComputeSession } from "@/features/compute/hooks";
 import { apiRequest } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -27,12 +31,28 @@ const navigation = [
   { to: "/inspiration", label: "灵感", icon: Lightbulb },
   { to: "/create", label: "生成", icon: Clapperboard },
   { to: "/assets", label: "资产", icon: Images },
+  { to: "/compute", label: "算力", icon: Cpu },
 ];
 
 export function AppShell() {
   const location = useLocation();
   const [accountOpen, setAccountOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const compute = useComputeSession();
+  const computeSession = compute.data;
+  const computeReady = Boolean(
+    computeSession && ["ready", "degraded"].includes(computeSession.state),
+  );
+  const computeLabel = computeReady
+    ? `${computeSession?.allocatedGpuCount ?? 0} 张 H100 · Fast ${computeSession?.profilePlan.fast ?? 0} / HQ ${computeSession?.profilePlan.hq ?? 0}`
+    : computeSession && ["requested", "allocating", "loading"].includes(computeSession.state)
+      ? "算力加载中"
+      : computeSession && ["draining", "releasing"].includes(computeSession.state)
+        ? "算力释放中"
+        : "算力未加载";
+  const computeCompactLabel = computeReady
+    ? `${computeSession?.allocatedGpuCount ?? 0} H100 · F${computeSession?.profilePlan.fast ?? 0}/H${computeSession?.profilePlan.hq ?? 0}`
+    : computeLabel;
   const health = useQuery({
     queryKey: ["system", "health"],
     queryFn: () => apiRequest<ServiceHealth>("/healthz"),
@@ -48,6 +68,7 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--color-canvas)] text-[var(--color-text)]">
+      <ComputeSessionSync />
       <header
         className={cn(
           "sticky top-0 z-50 flex h-[60px] shrink-0 items-center border-b px-3 transition-[background-color,box-shadow,border-color] duration-300 md:px-6",
@@ -64,12 +85,15 @@ export function AppShell() {
         >
           <motion.span
             aria-hidden="true"
-            className="relative grid size-8 place-items-center overflow-hidden rounded-[10px] bg-[var(--color-text)] text-white shadow-[0_5px_14px_rgba(48,46,42,0.16)]"
+            className="relative grid size-8 place-items-center text-[var(--color-text)]"
             transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
             whileHover={{ rotate: -3, scale: 1.04 }}
           >
-            <MoonStar className="size-4" strokeWidth={1.8} />
-            <span className="absolute right-1.5 top-1.5 size-1 rounded-full bg-[#bcb4ff]" />
+            <Moon className="size-4 -translate-x-px translate-y-px" strokeWidth={1.8} />
+            <Sparkle
+              className="absolute right-[5px] top-[5px] size-2.5 fill-[#f6cf68]/20 text-[#f6cf68] drop-shadow-[0_0_4px_rgba(246,207,104,0.9)]"
+              strokeWidth={2.1}
+            />
           </motion.span>
           <span className="hidden leading-none sm:block">
             <span className="block text-sm font-semibold tracking-[-0.025em]">Oneiroi</span>
@@ -86,6 +110,7 @@ export function AppShell() {
           >
             {navigation.map(({ icon: Icon, label, to }) => (
               <NavLink
+                aria-label={label}
                 className={({ isActive }) =>
                   cn(
                     "relative isolate flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-sm font-medium transition-colors duration-200 sm:gap-2 sm:px-3",
@@ -102,7 +127,7 @@ export function AppShell() {
                   <>
                     {isActive && <LayoutPill id="main-nav-pill" />}
                     <Icon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />
-                    <span>{label}</span>
+                    <span className="hidden sm:inline">{label}</span>
                   </>
                 )}
               </NavLink>
@@ -111,24 +136,28 @@ export function AppShell() {
         </LayoutGroup>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <span
-            aria-label={health.isSuccess ? "服务已连接" : "浏览器演示模式"}
-            className="grid size-8 place-items-center rounded-full text-[var(--color-text-muted)]"
-            role="status"
-            title={health.isSuccess ? `BFF ${health.data.version} 已连接` : "当前使用浏览器演示任务流"}
+          <NavLink
+            aria-label={computeLabel}
+            className="group flex h-9 min-w-0 items-center gap-2 rounded-lg px-2 text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] sm:px-2.5"
+            onClick={() => setAccountOpen(false)}
+            title={computeLabel}
+            to="/compute"
           >
-            <span className="relative flex size-2.5">
-              {!health.isSuccess && (
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400/55" />
-              )}
+            <span className="block max-w-[104px] truncate text-[9px] font-medium sm:hidden">
+              {computeCompactLabel}
+            </span>
+            <span className="hidden max-w-[250px] truncate text-[11px] font-medium sm:block">
+              {computeLabel}
+            </span>
+            <span className="relative flex size-2.5 shrink-0" role="status">
               <span
                 className={cn(
-                  "relative inline-flex size-2.5 rounded-full ring-2 ring-white",
-                  health.isSuccess ? "bg-[var(--color-success)]" : "bg-amber-400",
+                  "relative inline-flex size-2.5 rounded-full ring-2 ring-white transition-colors",
+                  computeReady ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]",
                 )}
               />
             </span>
-          </span>
+          </NavLink>
 
           <div className="relative">
             <button

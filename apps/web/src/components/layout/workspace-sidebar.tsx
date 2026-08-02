@@ -86,7 +86,7 @@ export function WorkspaceSidebar() {
         <div className="flex h-full flex-col px-3 pb-3 pt-3">
           <div className="flex items-center gap-2">
             <Button
-              className="flex-1 justify-start border-transparent bg-white/75 shadow-none hover:bg-white"
+              className="flex-1 transform-none justify-start border-transparent bg-white/75 shadow-none hover:transform-none hover:bg-white active:transform-none"
               disabled={createConversation.isPending}
               onClick={() =>
                 createConversation.mutate("未命名创作", {

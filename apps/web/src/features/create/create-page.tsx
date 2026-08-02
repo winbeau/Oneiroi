@@ -1,11 +1,8 @@
-import { PanelLeftOpen, Rows3, Sparkles } from "lucide-react";
+import { Moon, PanelLeftOpen, Rows3, Sparkle } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
 
 import { WorkspaceSidebar } from "@/components/layout/workspace-sidebar";
 import { Button } from "@/components/ui/button";
-import { ComputeControl } from "@/features/compute/compute-control";
-import { AgentPanel } from "@/features/create/agent-panel";
 import { Composer } from "@/features/create/composer";
 import { JobCard } from "@/features/create/job-card";
 import {
@@ -13,21 +10,45 @@ import {
   useJobEvents,
   useJobs,
 } from "@/features/studio/hooks";
+import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
 function CreationConsole() {
-  const [agentOpen, setAgentOpen] = useState(false);
+  return <Composer />;
+}
+
+function BrandSlogan({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="w-full">
-      <Composer agentOpen={agentOpen} onAgentToggle={() => setAgentOpen((value) => !value)} />
-      <AnimatePresence initial={false}>
-        {agentOpen && (
-          <motion.div className="mx-auto mt-4 max-w-[760px] overflow-hidden">
-            <AgentPanel defaultOpen />
-          </motion.div>
+    <div
+      className={cn(
+        "flex items-center justify-center gap-3 text-center font-display font-semibold tracking-[-0.025em] text-[var(--color-text)]",
+        compact ? "mb-7 text-xl md:text-2xl" : "mb-10 text-[30px] md:text-[36px]",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative grid shrink-0 place-items-center text-[var(--color-text)]",
+          compact ? "size-9" : "size-11",
         )}
-      </AnimatePresence>
+      >
+        <Moon
+          className={cn(
+            "-translate-x-[1px] translate-y-[1px]",
+            compact ? "size-[27px]" : "size-[33px]",
+          )}
+          strokeWidth={1.8}
+        />
+        <Sparkle
+          className={cn(
+            "absolute fill-[#f6cf68]/20 text-[#f6cf68] drop-shadow-[0_0_5px_rgba(246,207,104,0.9)]",
+            compact ? "right-[2px] top-[2px] size-[15px]" : "right-[1px] top-[1px] size-[18px]",
+          )}
+          strokeWidth={2.1}
+        />
+      </span>
+      <span>Oneiroi，让每个想象都有下一帧。</span>
     </div>
   );
 }
@@ -75,30 +96,26 @@ export function CreatePage() {
           </button>
         </header>
 
-        <ComputeControl activeJobs={activeJobs.length} />
-
         <div className="scrollbar-notion flex min-h-0 flex-1 flex-col overflow-y-auto">
           {conversationJobs.length === 0 ? (
             <div className="relative mx-auto flex w-full max-w-[1120px] flex-1 items-center justify-center px-4 py-10 md:px-7">
               <div className="relative z-10 w-full max-w-[920px]">
+                <BrandSlogan />
                 <CreationConsole />
               </div>
             </div>
           ) : (
             <>
-              <div className="mx-auto w-full max-w-[1120px] flex-1 px-4 pb-2 pt-5 md:px-7">
-                <section aria-label="生成任务" className="pb-5">
-                  <div className="mb-4 flex items-end justify-between gap-4">
-                    <div>
-                      <p className="flex items-center gap-2 text-xs font-medium text-[var(--color-accent)]">
-                        <Sparkles className="size-3.5" /> CREATION TIMELINE
-                      </p>
-                      <h2 className="font-display mt-1.5 text-2xl font-semibold">镜头正在成形</h2>
-                    </div>
+              <div className="mx-auto w-full max-w-[1080px] flex-1 px-4 pb-2 pt-6 md:px-7">
+                <section aria-label="创作对话" className="pb-5">
+                  <div className="mb-6 flex items-center gap-3 text-[10px] font-medium text-[var(--color-text-faint)]">
+                    <span className="h-px flex-1 bg-[var(--color-border)]" />
+                    今天
+                    <span className="h-px flex-1 bg-[var(--color-border)]" />
                   </div>
                   <AnimatePresence initial={false} mode="popLayout">
-                    <div className="space-y-4">
-                      {conversationJobs.map((job) => (
+                    <div className="space-y-7">
+                      {[...conversationJobs].reverse().map((job) => (
                         <motion.div key={job.id} layout>
                           <JobCard job={job} />
                         </motion.div>
@@ -107,8 +124,8 @@ export function CreatePage() {
                   </AnimatePresence>
                 </section>
               </div>
-              <div className="sticky bottom-0 z-20 mt-auto bg-gradient-to-t from-[var(--color-canvas)] via-[var(--color-canvas)]/96 to-transparent px-3 pb-3 pt-8 md:px-7">
-                <div className="mx-auto max-w-[980px]">
+              <div className="sticky bottom-0 z-20 mt-auto bg-gradient-to-t from-[var(--color-canvas)] via-[var(--color-canvas)]/97 to-transparent px-3 pb-3 pt-10 md:px-7">
+                <div className="mx-auto max-w-[1040px]">
                   <CreationConsole />
                 </div>
               </div>

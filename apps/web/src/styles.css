@@ -35,20 +35,22 @@
   --color-danger: #b84a4a;
   --color-preview: #272523;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 9px;
+  --radius-xl: 12px;
   --shadow-card: 0 1px 2px rgb(48 46 42 / 4%);
   --shadow-float: 0 18px 52px rgb(48 46 42 / 9%), 0 2px 8px rgb(48 46 42 / 5%);
   --shadow-menu: 0 12px 32px rgb(48 46 42 / 12%), 0 1px 4px rgb(48 46 42 / 6%);
 
   --ease-out-expo: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --motion-fast: 140ms;
-  --motion-micro: 190ms;
-  --motion-layout: 320ms;
-  --motion-enter: 560ms;
+  --motion-fast: 100ms;
+  --motion-micro: 140ms;
+  --motion-layout: 240ms;
+  --motion-enter: 380ms;
+  --default-transition-duration: 100ms;
+  --default-transition-timing-function: ease-out;
 }
 
 * {
@@ -180,6 +182,65 @@ a[href] {
   display: none;
 }
 
+.duration-range {
+  height: 18px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.duration-range:focus-visible {
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--color-accent) 32%, transparent));
+}
+
+.duration-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-text-muted) 0 var(--duration-progress, 0%),
+    var(--color-surface-hover) var(--duration-progress, 0%) 100%
+  );
+}
+
+.duration-range::-webkit-slider-thumb {
+  width: 5px;
+  height: 20px;
+  margin-top: -6px;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-text);
+  box-shadow: 0 0 0 2px white;
+}
+
+.duration-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-surface-hover);
+}
+
+.duration-range::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-text-muted);
+}
+
+.duration-range::-moz-range-thumb {
+  width: 5px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-text);
+  box-shadow: 0 0 0 2px white;
+}
+
+.duration-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .frame-flow {
   position: relative;
   overflow: hidden;
@@ -215,6 +276,44 @@ a[href] {
   animation: progress-shimmer 1.6s ease-in-out infinite;
 }
 
+.generation-waiting {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 72% 28%, rgb(128 181 219 / 42%), transparent 36%),
+    radial-gradient(circle at 30% 72%, rgb(100 88 185 / 38%), transparent 42%),
+    #242220;
+}
+
+.generation-waiting-image {
+  filter: blur(14px) saturate(0.82) brightness(0.72);
+  animation: generation-breathe 7s ease-in-out infinite alternate;
+}
+
+.generation-waiting-aurora {
+  z-index: 1;
+  background:
+    radial-gradient(circle at 18% 42%, rgb(56 170 225 / 62%), transparent 30%),
+    radial-gradient(circle at 74% 30%, rgb(184 206 220 / 48%), transparent 30%),
+    radial-gradient(circle at 58% 82%, rgb(112 91 196 / 44%), transparent 35%);
+  background-size: 150% 150%;
+  filter: blur(28px);
+  mix-blend-mode: screen;
+  opacity: 0.72;
+  animation: generation-aurora 8s ease-in-out infinite alternate;
+}
+
+.generation-waiting-sweep {
+  z-index: 2;
+  background: linear-gradient(
+    108deg,
+    transparent 25%,
+    rgb(255 255 255 / 12%) 44%,
+    transparent 62%
+  );
+  transform: translateX(-120%);
+  animation: generation-sweep 3.2s ease-in-out infinite;
+}
+
 .dream-orbit {
   animation: dream-orbit 8s ease-in-out infinite;
   transform-origin: center;
@@ -245,6 +344,37 @@ a[href] {
 @keyframes progress-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes generation-breathe {
+  0% {
+    transform: scale(1.02) translate3d(-1.5%, -1%, 0);
+  }
+  100% {
+    transform: scale(1.12) translate3d(2%, 1.5%, 0);
+  }
+}
+
+@keyframes generation-aurora {
+  0% {
+    background-position: 0% 25%;
+    transform: translate3d(-3%, 1%, 0) rotate(-2deg) scale(1.02);
+  }
+  100% {
+    background-position: 100% 70%;
+    transform: translate3d(4%, -2%, 0) rotate(3deg) scale(1.12);
+  }
+}
+
+@keyframes generation-sweep {
+  0%,
+  18% {
+    transform: translateX(-120%);
+  }
+  78%,
+  100% {
+    transform: translateX(120%);
   }
 }
 

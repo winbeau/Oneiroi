@@ -2,9 +2,17 @@
 node_modules/
 dist/
 .vite/
+.cache/
+.turbo/
 coverage/
 playwright-report/
-apps/web/test-results/
+test-results/
+blob-report/
+*.tsbuildinfo
+.eslintcache
+*.log
+*.pid
+*.pid.lock
 
 # Python
 .venv/
@@ -12,9 +20,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.pyright/
+.hypothesis/
+.tox/
+.nox/
 .coverage
+.coverage.*
 htmlcov/
 *.egg-info/
+.ipynb_checkpoints/
 
 # Environment and local state
 .env
@@ -30,6 +45,19 @@ htmlcov/
 !.vscode/settings.json
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.db
+*.stackdump
+
+# Temporary and patch leftovers
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*.rej
+*~
 
 # Local reference clones and agent state
 .beaupi/

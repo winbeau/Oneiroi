@@ -62,7 +62,7 @@ export async function demoRequest<T>(pathWithQuery: string, init?: RequestInit):
           tier: "fast",
           available: session !== null,
           resolutions: ["720p", "1080p"],
-          durations: [5, 8, 10],
+          durations: Array.from({ length: 15 }, (_, index) => index + 1),
           unavailableReason: session ? null : "COMPUTE_NOT_READY",
         },
         {
@@ -70,7 +70,7 @@ export async function demoRequest<T>(pathWithQuery: string, init?: RequestInit):
           tier: "hq",
           available: Boolean(session && session.allocatedGpuCount >= 2),
           resolutions: ["1080p"],
-          durations: [5],
+          durations: Array.from({ length: 15 }, (_, index) => index + 1),
           unavailableReason:
             session && session.allocatedGpuCount < 2
               ? "HQ_REQUIRES_AT_LEAST_2_GPUS"
@@ -173,6 +173,15 @@ export async function demoUpload(file: File): Promise<StudioAsset> {
 function advanceJobs() {
   for (const job of jobs) {
     if (!job.demoStartedAt || ["succeeded", "failed", "cancelled"].includes(job.stage)) continue;
+    if (import.meta.env.VITE_DEMO_HOLD_JOBS === "true") {
+      job.stage = "generating";
+      job.progress = 65;
+      job.phase = "diffusion";
+      job.currentStep = 5;
+      job.totalSteps = 8;
+      job.updatedAt = now();
+      continue;
+    }
     const elapsed = Date.now() - job.demoStartedAt;
     if (elapsed >= 4_000) {
       job.stage = "succeeded";

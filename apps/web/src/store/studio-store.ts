@@ -1,11 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import {
-  BOOK_PROMPT,
-  headFrameUrl,
-  tailFrameUrl,
-} from "@/features/studio/templates";
+import { DEFAULT_PROMPT } from "@/features/studio/templates";
 import type {
   GenerationDraft,
   InspirationTemplate,
@@ -13,7 +9,7 @@ import type {
 
 export const defaultDraft: GenerationDraft = {
   mode: "I2V",
-  prompt: BOOK_PROMPT,
+  prompt: DEFAULT_PROMPT,
   quality: "快速",
   ratio: "16:9",
   resolution: "720p",
@@ -28,8 +24,8 @@ export const defaultDraft: GenerationDraft = {
   profile: "fast",
   quantization: "fp8-cast",
   offload: "none",
-  firstFrame: { name: "head.png", url: headFrameUrl },
-  lastFrame: { name: "tail.png", url: tailFrameUrl },
+  firstFrame: null,
+  lastFrame: null,
 };
 
 type StudioState = {

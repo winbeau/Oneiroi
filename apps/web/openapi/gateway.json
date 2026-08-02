@@ -460,11 +460,8 @@
         "properties": {
           "duration": {
             "default": 5,
-            "enum": [
-              5,
-              8,
-              10
-            ],
+            "maximum": 15.0,
+            "minimum": 1.0,
             "title": "Duration",
             "type": "integer"
           },

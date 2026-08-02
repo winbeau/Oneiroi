@@ -13,6 +13,11 @@ const categories = ["全部", "团队灵感", "项目模板", "历史案例"] as
 
 type Category = (typeof categories)[number];
 
+const skyCityTemplate = inspirationTemplates.find((template) => template.id === "sky-city");
+const roommateTemplate = inspirationTemplates.find(
+  (template) => template.id === "roommate-romance-poster",
+);
+
 export function InspirationPage() {
   const navigate = useNavigate();
   const applyTemplate = useStudioStore((state) => state.applyTemplate);
@@ -40,7 +45,7 @@ export function InspirationPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1240px] px-4 pb-16 pt-5 md:px-7 md:pt-8">
-      <section className="paper-texture relative overflow-hidden rounded-[22px] border border-[var(--color-border)] bg-[var(--color-paper)] px-5 py-7 shadow-[var(--shadow-card)] md:px-9 md:py-10 lg:grid lg:min-h-[360px] lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:gap-10">
+      <section className="paper-texture relative overflow-hidden rounded-[14px] border border-[var(--color-border)] bg-[var(--color-paper)] px-5 py-7 shadow-[var(--shadow-card)] md:px-9 md:py-10 lg:grid lg:min-h-[360px] lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:gap-10">
         <div aria-hidden="true" className="dream-grid pointer-events-none absolute inset-0 opacity-55" />
         <div className="relative z-10 max-w-2xl">
           <motion.div
@@ -66,7 +71,7 @@ export function InspirationPage() {
             initial={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.52, delay: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
           >
-            浏览团队整理的镜头模板，把参考帧、Prompt 与规格带入生成页。这里保存的是可继续编辑的创作起点，而不是公开社区内容。
+            让灵感先成为画面，让每一次想象都通往更动人的下一帧。
           </motion.p>
           <motion.label
             animate={{ opacity: 1, y: 0 }}
@@ -97,32 +102,32 @@ export function InspirationPage() {
         <div className="relative z-10 mx-auto mt-8 hidden h-[270px] w-full max-w-[430px] lg:block">
           <motion.div
             animate={{ opacity: 1, x: 0, rotate: -4 }}
-            className="absolute left-0 top-7 aspect-[4/3] w-[62%] overflow-hidden rounded-[18px] border-4 border-white bg-[var(--color-preview)] shadow-[0_24px_60px_rgba(48,46,42,0.17)]"
+            className="absolute left-0 top-7 aspect-[4/3] w-[62%] overflow-hidden rounded-[12px] border-4 border-white bg-[var(--color-preview)] shadow-[0_18px_44px_rgba(48,46,42,0.15)]"
             initial={{ opacity: 0, x: 24, rotate: -8 }}
             transition={{ duration: 0.65, delay: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
           >
             <img
-              alt="模板首帧示例"
+              alt="天空之城历史案例"
               className="size-full object-cover"
-              src={inspirationTemplates[0]?.previewUrl}
+              src={skyCityTemplate?.previewUrl}
             />
             <span className="absolute bottom-3 left-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white backdrop-blur">
-              首帧
+              天空之城
             </span>
           </motion.div>
           <motion.div
             animate={{ opacity: 1, x: 0, rotate: 5 }}
-            className="absolute bottom-2 right-0 aspect-[4/3] w-[62%] overflow-hidden rounded-[18px] border-4 border-white bg-[var(--color-preview)] shadow-[0_24px_60px_rgba(48,46,42,0.17)]"
+            className="absolute bottom-0 right-1 aspect-[3/4] w-[48%] overflow-hidden rounded-[12px] border-4 border-white bg-[var(--color-preview)] shadow-[0_18px_44px_rgba(48,46,42,0.15)]"
             initial={{ opacity: 0, x: 28, rotate: 9 }}
             transition={{ duration: 0.65, delay: 0.36, ease: [0.2, 0.8, 0.2, 1] }}
           >
             <img
-              alt="模板尾帧示例"
-              className="size-full object-cover"
-              src={inspirationTemplates[0]?.secondaryPreviewUrl}
+              alt="合租舍友暖心片段历史案例"
+              className="size-full object-cover object-top"
+              src={roommateTemplate?.previewUrl}
             />
             <span className="absolute bottom-3 right-3 rounded-full bg-black/45 px-2.5 py-1 text-[10px] text-white backdrop-blur">
-              尾帧
+              合租舍友
             </span>
           </motion.div>
           <motion.span
@@ -177,40 +182,25 @@ export function InspirationPage() {
 
       <motion.section
         aria-label="灵感模板列表"
-        className="mt-2 grid gap-4 md:grid-cols-2 lg:grid-cols-12"
+        className="mt-2 columns-1 gap-4 md:columns-2 xl:columns-3"
         layout
       >
         <AnimatePresence mode="popLayout">
-          {visibleTemplates.map((template, index) => {
-            const wide = index === 0 && visibleTemplates.length > 1;
-            const horizontal = index === 2 && visibleTemplates.length === 3;
-            return (
+          {visibleTemplates.map((template, index) => (
               <Reveal
-                className={cn(
-                  "min-w-0 md:col-span-1",
-                  wide ? "lg:col-span-7" : horizontal ? "lg:col-span-12" : "lg:col-span-5",
-                )}
+                className="mb-4 inline-block w-full break-inside-avoid align-top"
                 delay={index * 0.07}
                 key={template.id}
               >
                 <motion.article
-                  className={cn(
-                    "group relative h-full overflow-hidden rounded-[18px] border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)] transition-[box-shadow,border-color] duration-300 hover:border-[var(--color-border-strong)] hover:shadow-[0_20px_55px_rgba(48,46,42,0.10)]",
-                    horizontal && "lg:grid lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]",
-                  )}
+                  className="group relative overflow-hidden rounded-[12px] border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)] transition-[box-shadow,border-color] duration-150 hover:border-[var(--color-border-strong)] hover:shadow-[0_8px_22px_rgba(48,46,42,0.08)]"
                   layout
                   transition={{ layout: { duration: 0.36, ease: [0.2, 0.8, 0.2, 1] } }}
                 >
-                  <div
-                    className={cn(
-                      "relative overflow-hidden bg-[var(--color-preview)]",
-                      wide ? "aspect-[16/9]" : "aspect-[4/3]",
-                      horizontal && "lg:aspect-auto lg:min-h-[330px]",
-                    )}
-                  >
+                  <div className="relative overflow-hidden bg-[var(--color-preview)]">
                     <img
                       alt={`${template.title}参考图`}
-                      className="size-full object-cover transition duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.025]"
+                      className="block h-auto w-full transition duration-500 ease-[var(--ease-out-expo)] group-hover:brightness-[0.96]"
                       src={template.previewUrl}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/48 via-transparent to-transparent opacity-75 transition group-hover:opacity-90" />
@@ -273,15 +263,14 @@ export function InspirationPage() {
                   </div>
                 </motion.article>
               </Reveal>
-            );
-          })}
+            ))}
         </AnimatePresence>
       </motion.section>
 
       {visibleTemplates.length === 0 && (
         <motion.div
           animate={{ opacity: 1, y: 0 }}
-          className="mt-5 rounded-[18px] border border-dashed border-[var(--color-border-strong)] bg-white/55 px-6 py-16 text-center"
+          className="mt-5 rounded-[12px] border border-dashed border-[var(--color-border-strong)] bg-white/55 px-6 py-16 text-center"
           initial={{ opacity: 0, y: 8 }}
         >
           <Search aria-hidden="true" className="mx-auto size-6 text-[var(--color-text-faint)]" />

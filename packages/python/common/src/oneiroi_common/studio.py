@@ -43,7 +43,7 @@ class GenerationDraft(ContractModel):
     profile: ProfileTier = ProfileTier.FAST
     ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
     resolution: Literal["720p", "1080p"] = "720p"
-    duration: Literal[5, 8, 10] = 5
+    duration: Annotated[int, Field(ge=1, le=15)] = 5
     seed: int = 42
     first_strength: float = Field(default=1, ge=0, le=1)
     last_strength: float = Field(default=1, ge=0, le=1)

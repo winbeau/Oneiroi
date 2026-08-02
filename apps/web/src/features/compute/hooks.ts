@@ -16,10 +16,12 @@ const computeKeys = {
   session: (sessionId: string) => ["compute", "session", sessionId] as const,
 };
 
-export function useComputeGpus() {
+export function useComputeGpus(refetchInterval: number | false = false) {
   return useQuery({
     queryKey: computeKeys.gpus,
     queryFn: () => apiRequest<GpuInventory>("/v1/compute/gpus"),
+    refetchInterval,
+    refetchIntervalInBackground: false,
   });
 }
 

@@ -88,15 +88,12 @@ export function AssetsPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1240px] px-4 pb-16 pt-7 md:px-7 md:pt-10">
-      <header className="flex flex-col gap-5 border-b border-[var(--color-border)] pb-7 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-4 border-b border-[var(--color-border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)]">
             PRIVATE LIBRARY
           </p>
           <h1 className="font-display mt-2 text-[40px] font-semibold">资产</h1>
-          <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-            服务端保存参考图、真实 MP4 和授权下载入口。
-          </p>
         </div>
         <Button onClick={() => inputRef.current?.click()} variant="primary">
           <Plus className="size-4" /> 上传素材
@@ -152,7 +149,7 @@ export function AssetsPage() {
         <p className="mt-5 text-sm text-[var(--color-danger)]">无法读取服务端资产。</p>
       )}
       {visibleAssets.length === 0 ? (
-        <section className="mt-8 rounded-[20px] border border-dashed p-16 text-center">
+        <section className="mt-8 rounded-[14px] border border-dashed p-16 text-center">
           <ImageIcon className="mx-auto size-6" />
           <h2 className="font-display mt-4 text-xl font-semibold">没有匹配的资产</h2>
         </section>
@@ -162,7 +159,7 @@ export function AssetsPage() {
           className={cn(
             "mt-5",
             assetView === "grid"
-              ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              ? "columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4"
               : "space-y-2",
           )}
         >
@@ -171,7 +168,9 @@ export function AssetsPage() {
             return (
               <article
                 className={cn(
-                  "group overflow-hidden rounded-[16px] border bg-white shadow-[var(--shadow-card)]",
+                  "group overflow-hidden rounded-[12px] border bg-white align-top shadow-[var(--shadow-card)]",
+                  assetView === "grid" &&
+                    "mb-4 inline-block w-full break-inside-avoid",
                   assetView === "list" && "flex items-center p-2",
                 )}
                 key={asset.id}
@@ -180,23 +179,40 @@ export function AssetsPage() {
                   aria-label={`预览 ${asset.title}`}
                   className={cn(
                     "relative block overflow-hidden bg-[var(--color-preview)]",
-                    assetView === "grid" ? "aspect-video w-full" : "h-20 w-32",
+                    assetView === "grid" ? "w-full" : "h-20 w-32",
                   )}
                   onClick={() => setSelectedAsset(asset)}
                   type="button"
                 >
                   {asset.type === "video" ? (
-                    <video className="size-full object-cover" muted preload="metadata" src={preview} />
+                    <video
+                      className={cn(
+                        "object-cover object-top",
+                        assetView === "grid" ? "aspect-video w-full" : "size-full",
+                      )}
+                      muted
+                      preload="metadata"
+                      src={preview}
+                    />
                   ) : (
-                    <img alt={asset.title} className="size-full object-cover" src={preview} />
+                    <img
+                      alt={asset.title}
+                      className={cn(
+                        "object-cover object-top",
+                        assetView === "grid" ? "block h-auto w-full" : "size-full",
+                      )}
+                      src={preview}
+                    />
                   )}
                   <span className="absolute left-2 top-2 rounded-full bg-white/80 px-2 py-1 text-[9px]">
                     {asset.type === "video" ? <Film className="inline size-3" /> : null} {asset.type}
                   </span>
                 </button>
-                <div className="min-w-0 flex-1 p-3">
-                  <h2 className="truncate text-sm font-semibold">{asset.title}</h2>
-                  <div className="mt-3 flex gap-1">
+                <div className="flex min-w-0 flex-1 items-center gap-2 p-3">
+                  <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+                    {asset.title}
+                  </h2>
+                  <div className="ml-auto flex shrink-0 justify-end gap-0.5">
                     <Button aria-label={`复用 ${asset.title}`} onClick={() => reuse(asset)} size="icon" variant="ghost">
                       <RotateCcw className="size-3.5" />
                     </Button>

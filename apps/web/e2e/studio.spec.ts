@@ -77,7 +77,7 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
             tier: "fast",
             available: !hasSession || Boolean(session),
             resolutions: ["720p", "1080p"],
-            durations: [5, 8, 10],
+            durations: Array.from({ length: 15 }, (_, index) => index + 1),
             unavailableReason: null,
           },
           {
@@ -85,7 +85,7 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
             tier: "hq",
             available: Boolean(session && gpuCount >= 2),
             resolutions: ["1080p"],
-            durations: [5],
+            durations: Array.from({ length: 15 }, (_, index) => index + 1),
             unavailableReason:
               session && gpuCount < 2 ? "HQ_REQUIRES_AT_LEAST_2_GPUS" : null,
           },
@@ -253,23 +253,38 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
   });
 }
 
-test("compute load gates HQ and completes a real API-driven timeline", async ({ page }) => {
+async function loadCompute(page: Page) {
+  await page.goto("/compute");
+  await expect(page.getByRole("button", { name: "热加载算力" })).toBeVisible();
+  await page.getByRole("button", { name: "热加载算力" }).click();
+  await page.getByRole("button", { name: "开始热加载" }).click();
+  await expect(page.getByRole("link", { name: /张 H100/ })).toBeVisible();
+}
+
+test("compute page gates HQ and completes a video-first conversation", async ({ page }) => {
   await mockBackend(page, { gpuCount: 1 });
   await page.goto("/create");
-
-  await expect(page.getByText("GPU 资源未加载")).toBeVisible();
+  await expect(page.getByRole("link", { name: "算力未加载" })).toBeVisible();
   await expect(page.getByRole("button", { name: "生成", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "热加载" }).click();
-  await page.getByRole("button", { name: "开始热加载" }).click();
-
-  await expect(page.getByText(/1 张 H100/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "高质量" })).toHaveAttribute(
+  await loadCompute(page);
+  await expect(page.getByRole("heading", { name: "GPU Inventory" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "实时 3s" })).toBeVisible();
+  await expect(page.getByText("GPU Workloads", { exact: true })).toBeVisible();
+  await expect(page.getByText(/GPU-demo-0/)).toHaveCount(0);
+  await expect(page.getByText("MEMORY USAGE", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/compute-demo-/)).toHaveCount(0);
+  await page.goto("/create");
+  await expect(page.getByRole("button", { name: "生成", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "选择 LTX 2.3 模型" }).click();
+  await expect(page.getByRole("button", { name: /LTX 2.3 高质量/ })).toHaveAttribute(
     "aria-disabled",
     "true",
   );
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "生成", exact: true }).click();
   await expect(page.getByText("已完成", { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("GPU 0").last()).toBeVisible();
+  await expect(page.getByText("Oneiroi，让每个想象都有下一帧。")).toHaveCount(0);
 });
 
 test("compute load works when crypto.randomUUID is unavailable", async ({ page }) => {
@@ -280,11 +295,8 @@ test("compute load works when crypto.randomUUID is unavailable", async ({ page }
     });
   });
   await mockBackend(page, { gpuCount: 1 });
-  await page.goto("/create");
-  await page.getByRole("button", { name: "热加载" }).click();
-  await page.getByRole("button", { name: "开始热加载" }).click();
-
-  await expect(page.getByText(/1 张 H100/)).toBeVisible();
+  await loadCompute(page);
+  await expect(page.getByRole("link", { name: /1 张 H100/ })).toBeVisible();
 });
 
 test("compute SSE does not reconnect when a snapshot updates", async ({ page }) => {
@@ -296,11 +308,8 @@ test("compute SSE does not reconnect when a snapshot updates", async ({ page }) 
       eventRequests += 1;
     },
   });
-  await page.goto("/create");
-  await page.getByRole("button", { name: "热加载" }).click();
-  await page.getByRole("button", { name: "开始热加载" }).click();
-
-  await expect(page.getByText(/1 张 H100/)).toBeVisible();
+  await loadCompute(page);
+  await expect(page.getByRole("link", { name: /1 张 H100/ })).toBeVisible();
   await page.waitForTimeout(500);
   expect(eventRequests).toBe(1);
 });
@@ -314,12 +323,12 @@ test("job SSE stays subscribed and hides technical zero-progress recovery", asyn
       eventRequests += 1;
     },
   });
+  await loadCompute(page);
   await page.goto("/create");
-  await page.getByRole("button", { name: "热加载" }).click();
-  await page.getByRole("button", { name: "开始热加载" }).click();
   await page.getByRole("button", { name: "生成", exact: true }).click();
 
-  await expect(page.getByText("正在确认可用的生成环境").first()).toBeVisible();
+  await expect(page.getByText("正在恢复匹配的模型").first()).toBeVisible();
+  await expect(page.locator(".generation-waiting")).toBeVisible();
   await expect(page.getByText(/PipelineSpec/)).toHaveCount(0);
   await expect(page.getByText("0%", { exact: true })).toHaveCount(0);
   await page.waitForTimeout(500);
@@ -328,24 +337,21 @@ test("job SSE stays subscribed and hides technical zero-progress recovery", asyn
 
 test("old terminal events do not close a retried job stream", async ({ page }) => {
   await mockBackend(page, { gpuCount: 1, replayPriorAttemptTerminalEvent: true });
+  await loadCompute(page);
   await page.goto("/create");
-  await page.getByRole("button", { name: "热加载" }).click();
-  await page.getByRole("button", { name: "开始热加载" }).click();
   await page.getByRole("button", { name: "生成", exact: true }).click();
 
-  await expect(page.getByText("生成中", { exact: true })).toBeVisible();
-  await expect(page.getByText("70%", { exact: true })).toBeVisible();
+  await expect(page.getByText("正在生成视频", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("70%", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("失败", { exact: true })).toHaveCount(0);
 });
 
 test("release returns compute control to the empty state", async ({ page }) => {
   await mockBackend(page, { gpuCount: 2 });
-  await page.goto("/create");
-  await page.getByRole("button", { name: "热加载" }).click();
-  await page.getByRole("button", { name: "开始热加载" }).click();
+  await loadCompute(page);
   await page.getByRole("button", { name: "释放资源" }).click();
   await page.getByRole("button", { name: "确认释放" }).click();
-  await expect(page.getByText("GPU 资源未加载")).toBeVisible();
+  await expect(page.getByRole("link", { name: "算力未加载" })).toBeVisible();
 });
 
 test("production API failure never becomes a fake success", async ({ page }) => {
@@ -358,17 +364,35 @@ test("production API failure never becomes a fake success", async ({ page }) => 
   await expect(page.getByText("已完成", { exact: true })).toHaveCount(0);
 });
 
-test("template remains editable and Agent suggestions require explicit adoption", async ({ page }) => {
+test("template remains editable in the streamlined creation composer", async ({ page }) => {
   await mockBackend(page);
   await page.goto("/inspiration");
   await page.getByRole("button", { name: "套用到生成" }).first().click();
   await expect(page.getByRole("textbox", { name: "生成提示词" })).toHaveValue(
-    /built-in headboard shelf/,
+    /fortified mountain city/,
   );
-  await page.getByRole("button", { name: "Agent", exact: true }).click();
-  await page.getByPlaceholder("例如：她从隐藏书柜里拿出一本书").fill("她打开柜门");
-  await page.getByRole("button", { name: "整理镜头" }).click();
-  await expect(page.getByText("镜头建议 · 等待确认")).toBeVisible();
+  await expect(page.getByText("Oneiroi，让每个想象都有下一帧。")).toBeVisible();
+  await expect(page.getByRole("button", { name: "更换首帧" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "上传尾帧" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Agent", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "打开高级参数" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "选择画面比例和分辨率" }).click();
+  await expect(page.getByRole("button", { name: "21:9", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "16:9", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "4:3", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "1:1", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "3:4", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "9:16", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "选择视频生成时长" }).click();
+  await expect(page.getByRole("slider", { name: "视频时长" })).toHaveAttribute("min", "1");
+  await expect(page.getByRole("slider", { name: "视频时长" })).toHaveAttribute("max", "15");
+  const durationInput = page.getByRole("spinbutton", { name: "手动输入视频时长" });
+  await durationInput.fill("15");
+  await durationInput.press("Enter");
+  await expect(page.getByRole("button", { name: "选择视频生成时长" })).toContainText("15 秒");
 });
 
 test("mobile workspace sidebar can collapse and reopen", async ({ page }, testInfo) => {

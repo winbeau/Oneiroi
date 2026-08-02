@@ -555,9 +555,8 @@ export interface components {
             /**
              * Duration
              * @default 5
-             * @enum {integer}
              */
-            duration: 5 | 8 | 10;
+            duration: number;
             /**
              * Enhanceprompt
              * @default false

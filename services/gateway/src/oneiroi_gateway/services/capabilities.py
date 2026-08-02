@@ -49,7 +49,7 @@ class CapabilityService:
                     tier=ProfileTier.FAST,
                     available=fast_available,
                     resolutions=["720p", "1080p"],
-                    durations=[5, 8, 10],
+                    durations=list(range(1, 16)),
                     unavailableReason=fast_reason,
                 ),
                 ProfileCapability(
@@ -57,7 +57,7 @@ class CapabilityService:
                     tier=ProfileTier.HQ,
                     available=hq_available,
                     resolutions=["1080p"],
-                    durations=[5],
+                    durations=list(range(1, 16)),
                     unavailableReason=hq_reason,
                 ),
             ]
