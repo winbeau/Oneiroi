@@ -9,6 +9,11 @@ const root = resolve(process.env.ONEIROI_WEB_DIST ?? "apps/web/dist");
 const bffTarget = new URL(process.env.ONEIROI_BFF_TARGET ?? "http://127.0.0.1:8000");
 const host = process.env.ONEIROI_WEB_HOST ?? "127.0.0.1";
 const port = Number(process.env.ONEIROI_WEB_PORT ?? 4173);
+const proxyMaxBodyBytes = Number(
+  process.env.ONEIROI_WEB_PROXY_MAX_BODY_BYTES ?? 20 * 1024 * 1024,
+);
+
+class RequestBodyTooLargeError extends Error {}
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -66,9 +71,23 @@ function copyResponseHeaders(response) {
   return headers;
 }
 
+async function readRequestBody(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > proxyMaxBodyBytes) {
+      throw new RequestBodyTooLargeError();
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks, size);
+}
+
 async function proxyApi(request, response, requestUrl) {
   const target = new URL(requestUrl.pathname + requestUrl.search, bffTarget);
   const hasBody = !["GET", "HEAD"].includes(request.method ?? "GET");
+  const body = hasBody ? await readRequestBody(request) : undefined;
   const abortController = new AbortController();
   request.once("aborted", () => abortController.abort());
   response.once("close", () => {
@@ -77,8 +96,7 @@ async function proxyApi(request, response, requestUrl) {
   const upstream = await fetch(target, {
     method: request.method,
     headers: copyRequestHeaders(request),
-    body: hasBody ? Readable.toWeb(request) : undefined,
-    duplex: hasBody ? "half" : undefined,
+    body,
     redirect: "manual",
     signal: abortController.signal,
   });
@@ -151,8 +169,15 @@ const server = createServer(async (request, response) => {
     await serveStatic(request, response, requestUrl);
   } catch (error) {
     if (!response.headersSent) {
-      response.writeHead(502, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ detail: "UPSTREAM_ORIGIN_UNAVAILABLE" }));
+      const bodyTooLarge = error instanceof RequestBodyTooLargeError;
+      response.writeHead(bodyTooLarge ? 413 : 502, {
+        "Content-Type": "application/json",
+      });
+      response.end(
+        JSON.stringify({
+          detail: bodyTooLarge ? "REQUEST_TOO_LARGE" : "UPSTREAM_ORIGIN_UNAVAILABLE",
+        }),
+      );
     } else if (!response.destroyed) {
       response.destroy();
     }
