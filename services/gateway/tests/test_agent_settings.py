@@ -70,6 +70,11 @@ def test_store_cannot_be_enabled() -> None:
         settings(agent_store=True)
 
 
+def test_tool_flag_requires_agent() -> None:
+    with pytest.raises(ValidationError, match="Agent tools"):
+        settings(agent_tools_enabled=True)
+
+
 def test_image_flags_require_agent() -> None:
     with pytest.raises(ValidationError, match="Agent image flags"):
         settings(agent_image_enabled=True)

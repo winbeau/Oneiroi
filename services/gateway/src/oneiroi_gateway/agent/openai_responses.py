@@ -338,7 +338,10 @@ class _ResponseStreamState:
             if key in self.finalized_tools:
                 raise AgentProviderError(ProviderErrorCode.TOOL_ARGUMENTS_INVALID)
             delta = _string(external.get("delta")) or ""
-            self.tool_buffers[key] = self.tool_buffers.get(key, "") + delta
+            buffered = self.tool_buffers.get(key, "") + delta
+            if len(buffered.encode()) > 64 * 1024:
+                raise AgentProviderError(ProviderErrorCode.TOOL_ARGUMENTS_INVALID)
+            self.tool_buffers[key] = buffered
             return [
                 event(
                     ProviderEventType.TOOL_ARGUMENTS_DELTA,
@@ -425,6 +428,8 @@ class _ResponseStreamState:
         arguments_text = (
             complete_arguments if complete_arguments is not None else buffered_arguments
         )
+        if len(arguments_text.encode()) > 64 * 1024:
+            raise AgentProviderError(ProviderErrorCode.TOOL_ARGUMENTS_INVALID)
         try:
             arguments = json.loads(arguments_text)
         except (json.JSONDecodeError, TypeError):

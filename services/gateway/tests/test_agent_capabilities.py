@@ -61,6 +61,11 @@ async def test_capability_endpoint_is_disabled_by_default() -> None:
         "transports": [],
         "websocketDeclared": False,
         "websocketVerified": False,
+        "toolsEnabled": False,
+        "tools": [],
+        "maxTurns": 0,
+        "maxToolCalls": 0,
+        "maxApprovals": 0,
     }
 
 
@@ -105,6 +110,51 @@ def test_probe_controls_image_capabilities(tmp_path: Path) -> None:
     ).get()
     assert enabled_images.image_input is True
     assert enabled_images.image_generation is True
+
+
+def test_probe_and_feature_flag_control_safe_tool_capabilities(tmp_path: Path) -> None:
+    record_path = tmp_path / "agent-capabilities.json"
+    write_record(record_path)
+    response = AgentCapabilityService(
+        settings(
+            agent_enabled=True,
+            agent_api_key="secret",
+            agent_base_url="https://provider.example/v1",
+            agent_capability_file=record_path,
+            agent_tools_enabled=True,
+        )
+    ).get()
+    assert response.tools_enabled is True
+    assert {tool.name for tool in response.tools} == {
+        "get_creation_context",
+        "list_assets",
+        "get_asset_metadata",
+        "get_job_snapshot",
+        "propose_draft_patch",
+    }
+    assert all(tool.requires_approval is False for tool in response.tools)
+    assert response.max_turns == 8
+    assert response.max_tool_calls == 12
+    assert response.max_approvals == 3
+
+
+@pytest.mark.asyncio
+async def test_runtime_tools_fail_closed_when_probe_does_not_support_functions(
+    tmp_path: Path,
+) -> None:
+    record_path = tmp_path / "agent-capabilities.json"
+    write_record(record_path, function_tools=CapabilitySupport.UNSUPPORTED)
+    configured = settings(
+        agent_enabled=True,
+        agent_api_key="secret",
+        agent_base_url="https://provider.example/v1",
+        agent_capability_file=record_path,
+        agent_tools_enabled=True,
+    )
+    app = create_app(configured)
+    assert app.state.agent_runtime.tools_enabled is False
+    assert AgentCapabilityService(configured).get().tools_enabled is False
+    await app.state.agent_runtime.close()
 
 
 def test_probe_is_bound_to_endpoint_and_image_model(tmp_path: Path) -> None:

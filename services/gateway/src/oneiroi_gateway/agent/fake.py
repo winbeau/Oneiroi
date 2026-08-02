@@ -19,6 +19,7 @@ class FakeAgentProvider:
         self,
         *,
         events: list[ProviderEvent] | None = None,
+        event_batches: list[list[ProviderEvent]] | None = None,
         image_generation: bool = False,
         delay_seconds: float = 0,
     ) -> None:
@@ -45,6 +46,7 @@ class FakeAgentProvider:
                 event_type=ProviderEventType.RESPONSE_COMPLETED, response_id="fake-response"
             ),
         ]
+        self.event_batches = event_batches
         self.image_generation = image_generation
         self.delay_seconds = delay_seconds
         self.requests: list[ProviderRequest] = []
@@ -52,7 +54,14 @@ class FakeAgentProvider:
 
     async def stream_response(self, request: ProviderRequest) -> AsyncIterator[ProviderEvent]:
         self.requests.append(request)
-        for event in self.events:
+        if self.event_batches is not None:
+            index = len(self.requests) - 1
+            if index >= len(self.event_batches):
+                raise RuntimeError("FAKE_PROVIDER_BATCHES_EXHAUSTED")
+            events = self.event_batches[index]
+        else:
+            events = self.events
+        for event in events:
             if self.delay_seconds:
                 await asyncio.sleep(self.delay_seconds)
             yield event

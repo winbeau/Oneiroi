@@ -123,6 +123,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/tool-calls/{tool_call_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Tool Call */
+        post: operations["approve_tool_call_v1_agent_tool_calls__tool_call_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/tool-calls/{tool_call_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Tool Call */
+        post: operations["reject_tool_call_v1_agent_tool_calls__tool_call_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assets": {
         parameters: {
             query?: never;
@@ -503,6 +537,41 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentApprovalDecision */
+        AgentApprovalDecision: {
+            /** Clientversion */
+            clientVersion?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** AgentApprovalResponse */
+        AgentApprovalResponse: {
+            /** Argumentshash */
+            argumentsHash: string;
+            /** Consumedat */
+            consumedAt?: string | null;
+            /** Decidedat */
+            decidedAt?: string | null;
+            /** Estimatedcost */
+            estimatedCost?: string | null;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
+            /** Id */
+            id: string;
+            /** Runid */
+            runId: string;
+            status: components["schemas"]["AgentApprovalStatus"];
+            /** Toolcallid */
+            toolCallId: string;
+        };
+        /**
+         * AgentApprovalStatus
+         * @enum {string}
+         */
+        AgentApprovalStatus: "pending" | "approved" | "rejected" | "consumed" | "expired";
         /** AgentCapabilitiesResponse */
         AgentCapabilitiesResponse: {
             /** Available */
@@ -526,6 +595,21 @@ export interface components {
              * @default false
              */
             imageInput: boolean;
+            /**
+             * Maxapprovals
+             * @default 0
+             */
+            maxApprovals: number;
+            /**
+             * Maxtoolcalls
+             * @default 0
+             */
+            maxToolCalls: number;
+            /**
+             * Maxturns
+             * @default 0
+             */
+            maxTurns: number;
             /** Model */
             model?: string | null;
             /** Provider */
@@ -542,6 +626,13 @@ export interface components {
              * @default false
              */
             text: boolean;
+            /** Tools */
+            tools?: components["schemas"]["AgentToolCapability"][];
+            /**
+             * Toolsenabled
+             * @default false
+             */
+            toolsEnabled: boolean;
             /** Transports */
             transports?: ("sse" | "websocket")[];
             /**
@@ -706,6 +797,70 @@ export interface components {
          * @enum {string}
          */
         AgentThreadStatus: "active" | "archived";
+        /** AgentToolCallResponse */
+        AgentToolCallResponse: {
+            /** Arguments */
+            arguments: {
+                [key: string]: unknown;
+            };
+            /** Argumentshash */
+            argumentsHash: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Id */
+            id: string;
+            /** Resourceid */
+            resourceId?: string | null;
+            /** Resourcetype */
+            resourceType?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            risk: components["schemas"]["AgentToolRisk"];
+            /** Runid */
+            runId: string;
+            /** Startedat */
+            startedAt?: string | null;
+            status: components["schemas"]["AgentToolCallStatus"];
+            /** Toolname */
+            toolName: string;
+            /** Toolversion */
+            toolVersion: string;
+        };
+        /**
+         * AgentToolCallStatus
+         * @enum {string}
+         */
+        AgentToolCallStatus: "proposed" | "waiting_approval" | "approved" | "running" | "succeeded" | "failed" | "rejected" | "expired";
+        /** AgentToolCapability */
+        AgentToolCapability: {
+            /** Name */
+            name: string;
+            /** Requiresapproval */
+            requiresApproval: boolean;
+            risk: components["schemas"]["AgentToolRisk"];
+        };
+        /** AgentToolDecisionResponse */
+        AgentToolDecisionResponse: {
+            approval: components["schemas"]["AgentApprovalResponse"];
+            run: components["schemas"]["AgentRunResponse"];
+            toolCall: components["schemas"]["AgentToolCallResponse"];
+        };
+        /**
+         * AgentToolRisk
+         * @enum {string}
+         */
+        AgentToolRisk: "read" | "proposal" | "write" | "costly" | "destructive";
         /** AgentUsage */
         AgentUsage: {
             /**
@@ -1430,6 +1585,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_tool_call_v1_agent_tool_calls__tool_call_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                tool_call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolDecisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_tool_call_v1_agent_tool_calls__tool_call_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                tool_call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentToolDecisionResponse"];
                 };
             };
             /** @description Validation Error */

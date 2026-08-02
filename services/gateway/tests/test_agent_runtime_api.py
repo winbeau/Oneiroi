@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -47,11 +47,14 @@ class CancellingRaceRepository(InMemoryAgentRepository):
         event_type: str,
         payload: dict[str, object],
         expected_statuses: frozenset[AgentRunStatus] | None = None,
+        executor_id: str | None = None,
     ) -> AgentEventResponse:
         if not self.triggered and self.race_on == "append" and event_type == "agent.message.delta":
             self.triggered = True
             await self._begin_cancel(owner_id, run_id)
-        return await super().append_event(owner_id, run_id, event_type, payload, expected_statuses)
+        return await super().append_event(
+            owner_id, run_id, event_type, payload, expected_statuses, executor_id
+        )
 
     async def finish_run(
         self,
@@ -60,6 +63,7 @@ class CancellingRaceRepository(InMemoryAgentRepository):
         event_type: str,
         payload: dict[str, object],
         expected_statuses: frozenset[AgentRunStatus],
+        executor_id: str | None = None,
     ) -> AgentMessageResponse:
         if not self.triggered and self.race_on == "finish":
             self.triggered = True
@@ -70,6 +74,7 @@ class CancellingRaceRepository(InMemoryAgentRepository):
             event_type,
             payload,
             expected_statuses,
+            executor_id,
         )
 
 
@@ -405,3 +410,55 @@ async def test_restart_recovery_deterministically_terminates_incomplete_run(
     assert recovered == [stored.response.id]
     assert snapshot.status == "failed"
     assert snapshot.error_code == "AGENT_RECOVERY_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_execution_lease_prevents_cross_gateway_recovery_until_expired() -> None:
+    studio = InMemoryStudioRepository()
+    conversation = await studio.create_conversation("owner-a", "Lease recovery")
+    repository = InMemoryAgentRepository()
+    settings = GatewaySettings(
+        _env_file=None,
+        agent_enabled=True,
+        agent_api_key="test-key",
+        agent_base_url="https://provider.invalid/v1",
+    )
+    first_runtime = AgentRuntime(
+        repository,
+        studio,
+        FakeAgentProvider(
+            events=response_events({"text": "leased"}),
+            delay_seconds=5,
+        ),
+        settings,
+    )
+    created = await first_runtime.create_run(
+        "owner-a",
+        AgentRunCreate(
+            conversationId=conversation.id,
+            message="hold the execution lease",
+            draftSnapshot={"prompt": "lake"},
+        ),
+        "lease-recovery-1",
+    )
+    for _ in range(100):
+        stored = await repository.get_run("owner-a", created.id)
+        if stored.response.status is AgentRunStatus.STREAMING:
+            break
+        await asyncio.sleep(0.01)
+    assert stored.executor_id == first_runtime.executor_id
+    assert stored.execution_lease_expires_at is not None
+
+    second_runtime = AgentRuntime(repository, studio, None, settings)
+    assert await second_runtime.recover_incomplete() == []
+    assert (await second_runtime.get_run("owner-a", created.id)).status is AgentRunStatus.STREAMING
+
+    repository.runs[created.id].execution_lease_expires_at = datetime.now(UTC) - timedelta(
+        seconds=1
+    )
+    assert await second_runtime.recover_incomplete() == [created.id]
+    recovered = await second_runtime.get_run("owner-a", created.id)
+    assert recovered.status is AgentRunStatus.FAILED
+    assert recovered.error_code == "AGENT_RECOVERY_REQUIRED"
+    await first_runtime.close()
+    await second_runtime.close()

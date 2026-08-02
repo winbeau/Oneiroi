@@ -1,6 +1,122 @@
 {
   "components": {
     "schemas": {
+      "AgentApprovalDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "clientVersion": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientversion"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "AgentApprovalDecision",
+        "type": "object"
+      },
+      "AgentApprovalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "argumentsHash": {
+            "title": "Argumentshash",
+            "type": "string"
+          },
+          "consumedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumedat"
+          },
+          "decidedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decidedat"
+          },
+          "estimatedCost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimatedcost"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "runId": {
+            "title": "Runid",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentApprovalStatus"
+          },
+          "toolCallId": {
+            "title": "Toolcallid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "toolCallId",
+          "argumentsHash",
+          "status",
+          "expiresAt"
+        ],
+        "title": "AgentApprovalResponse",
+        "type": "object"
+      },
+      "AgentApprovalStatus": {
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "consumed",
+          "expired"
+        ],
+        "title": "AgentApprovalStatus",
+        "type": "string"
+      },
       "AgentCapabilitiesResponse": {
         "additionalProperties": false,
         "properties": {
@@ -30,6 +146,24 @@
             "default": false,
             "title": "Imageinput",
             "type": "boolean"
+          },
+          "maxApprovals": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Maxapprovals",
+            "type": "integer"
+          },
+          "maxToolCalls": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Maxtoolcalls",
+            "type": "integer"
+          },
+          "maxTurns": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Maxturns",
+            "type": "integer"
           },
           "model": {
             "anyOf": [
@@ -73,6 +207,19 @@
           "text": {
             "default": false,
             "title": "Text",
+            "type": "boolean"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/AgentToolCapability"
+            },
+            "maxItems": 32,
+            "title": "Tools",
+            "type": "array"
+          },
+          "toolsEnabled": {
+            "default": false,
+            "title": "Toolsenabled",
             "type": "boolean"
           },
           "transports": {
@@ -518,6 +665,209 @@
           "archived"
         ],
         "title": "AgentThreadStatus",
+        "type": "string"
+      },
+      "AgentToolCallResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "arguments": {
+            "additionalProperties": true,
+            "title": "Arguments",
+            "type": "object"
+          },
+          "argumentsHash": {
+            "title": "Argumentshash",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "errorCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorcode"
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errormessage"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finishedat"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "resourceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resourceid"
+          },
+          "resourceType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resourcetype"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/AgentToolRisk"
+          },
+          "runId": {
+            "title": "Runid",
+            "type": "string"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentToolCallStatus"
+          },
+          "toolName": {
+            "title": "Toolname",
+            "type": "string"
+          },
+          "toolVersion": {
+            "title": "Toolversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "toolName",
+          "toolVersion",
+          "risk",
+          "arguments",
+          "argumentsHash",
+          "status",
+          "createdAt"
+        ],
+        "title": "AgentToolCallResponse",
+        "type": "object"
+      },
+      "AgentToolCallStatus": {
+        "enum": [
+          "proposed",
+          "waiting_approval",
+          "approved",
+          "running",
+          "succeeded",
+          "failed",
+          "rejected",
+          "expired"
+        ],
+        "title": "AgentToolCallStatus",
+        "type": "string"
+      },
+      "AgentToolCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "requiresApproval": {
+            "title": "Requiresapproval",
+            "type": "boolean"
+          },
+          "risk": {
+            "$ref": "#/components/schemas/AgentToolRisk"
+          }
+        },
+        "required": [
+          "name",
+          "risk",
+          "requiresApproval"
+        ],
+        "title": "AgentToolCapability",
+        "type": "object"
+      },
+      "AgentToolDecisionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/AgentApprovalResponse"
+          },
+          "run": {
+            "$ref": "#/components/schemas/AgentRunResponse"
+          },
+          "toolCall": {
+            "$ref": "#/components/schemas/AgentToolCallResponse"
+          }
+        },
+        "required": [
+          "toolCall",
+          "approval",
+          "run"
+        ],
+        "title": "AgentToolDecisionResponse",
+        "type": "object"
+      },
+      "AgentToolRisk": {
+        "enum": [
+          "read",
+          "proposal",
+          "write",
+          "costly",
+          "destructive"
+        ],
+        "title": "AgentToolRisk",
         "type": "string"
       },
       "AgentUsage": {
@@ -2231,6 +2581,130 @@
           }
         },
         "summary": "List Messages",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/tool-calls/{tool_call_id}/approve": {
+      "post": {
+        "operationId": "approve_tool_call_v1_agent_tool_calls__tool_call_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tool_call_id",
+            "required": true,
+            "schema": {
+              "title": "Tool Call Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentApprovalDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Tool Call",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/tool-calls/{tool_call_id}/reject": {
+      "post": {
+        "operationId": "reject_tool_call_v1_agent_tool_calls__tool_call_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tool_call_id",
+            "required": true,
+            "schema": {
+              "title": "Tool Call Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentApprovalDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Tool Call",
         "tags": [
           "agent"
         ]

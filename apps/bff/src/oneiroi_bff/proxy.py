@@ -274,6 +274,32 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
             maximum_bytes=settings.max_agent_json_bytes,
         )
 
+    @router.post("/v1/agent/tool-calls/{tool_call_id}/approve")
+    async def approve_agent_tool(
+        tool_call_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(
+            request,
+            f"/v1/agent/tool-calls/{tool_call_id}/approve",
+            user,
+            maximum_bytes=settings.max_agent_json_bytes,
+        )
+
+    @router.post("/v1/agent/tool-calls/{tool_call_id}/reject")
+    async def reject_agent_tool(
+        tool_call_id: str,
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(
+            request,
+            f"/v1/agent/tool-calls/{tool_call_id}/reject",
+            user,
+            maximum_bytes=settings.max_agent_json_bytes,
+        )
+
     @router.get("/v1/compute/gpus")
     async def compute_gpus(
         request: Request,

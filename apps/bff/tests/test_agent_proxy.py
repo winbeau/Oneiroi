@@ -59,6 +59,10 @@ async def test_bff_explicitly_proxies_agent_routes_and_sse_headers() -> None:
             f"/v1/agent/threads/{thread.json()['id']}/messages", headers=headers
         )
         events = await client.get(f"/v1/agent/runs/{run.json()['id']}/events", headers=headers)
+        approve = await client.post(
+            "/v1/agent/tool-calls/missing/approve", headers=headers, json={}
+        )
+        reject = await client.post("/v1/agent/tool-calls/missing/reject", headers=headers, json={})
         unknown = await client.get("/v1/agent/not-allowlisted", headers=headers)
 
     assert capabilities.status_code == 200
@@ -67,6 +71,7 @@ async def test_bff_explicitly_proxies_agent_routes_and_sse_headers() -> None:
     assert messages.json()[-1]["content"]["draftProposal"]["prompt"] == "improved prompt"
     assert events.headers["cache-control"] == "no-cache"
     assert events.headers["x-accel-buffering"] == "no"
+    assert approve.status_code == reject.status_code == 404
     assert unknown.status_code == 404
     await gateway.state.agent_runtime.close()
 
@@ -87,4 +92,8 @@ async def test_bff_uses_smaller_agent_json_limit() -> None:
             headers={"Idempotency-Key": "body-limit"},
             content=b"123456789",
         )
-    assert response.status_code == 413
+        approval = await client.post(
+            "/v1/agent/tool-calls/test/approve",
+            content=b"123456789",
+        )
+    assert response.status_code == approval.status_code == 413

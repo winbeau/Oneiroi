@@ -7,15 +7,20 @@ from pydantic import ValidationError
 from oneiroi_common.agent import (
     AgentCapabilitiesResponse,
     AgentProbeRecord,
+    AgentToolCapability,
     CapabilitySupport,
 )
 from oneiroi_gateway.agent.endpoint import provider_endpoint_hash
+from oneiroi_gateway.agent.registry import ToolRegistry, builtin_tool_registry
 from oneiroi_gateway.settings import GatewaySettings
 
 
 class AgentCapabilityService:
-    def __init__(self, settings: GatewaySettings) -> None:
+    def __init__(
+        self, settings: GatewaySettings, tool_registry: ToolRegistry | None = None
+    ) -> None:
         self.settings = settings
+        self.tool_registry = tool_registry or builtin_tool_registry()
 
     def get(self) -> AgentCapabilitiesResponse:
         settings = self.settings
@@ -67,6 +72,11 @@ class AgentCapabilityService:
         image_model_matches = record.image_model == (
             settings.agent_image_model or settings.agent_model
         )
+        tools_enabled = (
+            available
+            and settings.agent_tools_enabled
+            and record.function_tools == CapabilitySupport.SUPPORTED
+        )
         return AgentCapabilitiesResponse(
             enabled=True,
             configured=True,
@@ -92,6 +102,22 @@ class AgentCapabilityService:
             transports=list(record.transport),
             websocket_declared=record.websocket_declared,
             websocket_verified=record.websocket_verified,
+            tools_enabled=tools_enabled,
+            tools=(
+                [
+                    AgentToolCapability(
+                        name=tool.name,
+                        risk=tool.risk,
+                        requiresApproval=tool.requires_approval,
+                    )
+                    for tool in self.tool_registry.definitions()
+                ]
+                if tools_enabled
+                else []
+            ),
+            maxTurns=settings.agent_max_turns if tools_enabled else 0,
+            maxToolCalls=settings.agent_max_tool_calls if tools_enabled else 0,
+            maxApprovals=settings.agent_max_approvals if tools_enabled else 0,
         )
 
     def _unavailable(self, reason_code: str) -> AgentCapabilitiesResponse:

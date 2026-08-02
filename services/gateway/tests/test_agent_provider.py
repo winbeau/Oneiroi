@@ -264,6 +264,40 @@ async def test_tool_finalization_rejects_late_argument_or_metadata_changes() -> 
 
 
 @pytest.mark.asyncio
+async def test_oversized_tool_argument_stream_is_rejected_before_buffering_unbounded_data() -> None:
+    tool = ProviderTool(
+        name="echo_probe",
+        description="Echo a probe value.",
+        input_schema={
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+    )
+    payload = b"".join(
+        [
+            b'data: {"type":"response.output_item.added","item":'
+            b'{"id":"large-tool","type":"function_call",'
+            b'"call_id":"large-call","name":"echo_probe","arguments":""}}\n\n',
+            b'data: {"type":"response.function_call_arguments.delta",'
+            b'"item_id":"large-tool","delta":"',
+            b"x" * (64 * 1024 + 1),
+            b'"}\n\n',
+        ]
+    )
+
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=payload)
+
+    adapter = provider(handler)
+    with pytest.raises(AgentProviderError) as raised:
+        _ = [event async for event in adapter.stream_response(request(tools=[tool]))]
+    await adapter.close()
+    assert raised.value.code == ProviderErrorCode.TOOL_ARGUMENTS_INVALID
+
+
+@pytest.mark.asyncio
 async def test_malformed_or_extra_tool_arguments_are_rejected() -> None:
     tool = ProviderTool(
         name="echo_probe",

@@ -1,7 +1,7 @@
 import asyncio
 import os
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,15 +10,35 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from oneiroi_common.agent import AgentMessageContent, AgentRunResponse, AgentRunStatus
-from oneiroi_common.compute import ComputeSessionCreate, ComputeSessionRelease, GpuInfo, GpuState
+from oneiroi_common.agent import (
+    AgentMessageContent,
+    AgentRunResponse,
+    AgentRunStatus,
+    AgentToolRisk,
+)
+from oneiroi_common.compute import (
+    ComputeSessionCreate,
+    ComputeSessionRelease,
+    ContractModel,
+    GpuInfo,
+    GpuState,
+)
 from oneiroi_gateway.agent.fake import FakeAgentProvider
 from oneiroi_gateway.agent.protocol import ProviderEvent, ProviderEventType
+from oneiroi_gateway.agent.registry import (
+    RegisteredTool,
+    ToolExecutionContext,
+    ToolRegistry,
+)
 from oneiroi_gateway.agent.runtime import AgentRuntime
 from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.main import create_app
 from oneiroi_gateway.redis.leases import InMemoryLeaseStore
-from oneiroi_gateway.repositories.agent import AgentStateConflict, StoredAgentRun
+from oneiroi_gateway.repositories.agent import (
+    AgentExecutionOwned,
+    AgentStateConflict,
+    StoredAgentRun,
+)
 from oneiroi_gateway.repositories.compute import SqlComputeStateRepository
 from oneiroi_gateway.repositories.sql_agent import SqlAgentRepository
 from oneiroi_gateway.repositories.sql_studio import SqlStudioRepository
@@ -36,6 +56,38 @@ DATABASE_URL = os.getenv(
     "ONEIROI_GATEWAY_DATABASE_URL",
     "postgresql+asyncpg://oneiroi:oneiroi-local@127.0.0.1:5432/oneiroi",
 )
+
+
+class PersistedCostlyArguments(ContractModel):
+    value: str
+
+
+class PersistedCostlyResult(ContractModel):
+    value: str
+
+
+async def persisted_costly_handler(
+    _context: ToolExecutionContext, arguments: PersistedCostlyArguments
+) -> PersistedCostlyResult:
+    return PersistedCostlyResult(value=arguments.value)
+
+
+def persisted_tool_registry() -> ToolRegistry:
+    return ToolRegistry(
+        [
+            RegisteredTool(
+                name="persisted_costly_probe",
+                version="1",
+                description="PostgreSQL approval persistence probe.",
+                input_model=PersistedCostlyArguments,
+                output_model=PersistedCostlyResult,
+                risk=AgentToolRisk.COSTLY,
+                max_calls_per_run=1,
+                timeout_seconds=5,
+                handler=persisted_costly_handler,
+            )
+        ]
+    )
 
 
 def postgres_stored_run(
@@ -209,6 +261,55 @@ async def test_agent_database_enforces_concurrency_cas_and_owner_relationships()
     assert str(rejected[0]) == "AGENT_RUN_CONCURRENCY_LIMIT"
 
     active = created[0][0]
+    first_executor = f"executor-{uuid4().hex}"
+    second_executor = f"executor-{uuid4().hex}"
+    claimed = await first_repository.claim_run_execution(
+        owner,
+        active.response.id,
+        first_executor,
+        datetime.now(UTC) + timedelta(seconds=30),
+    )
+    assert claimed.executor_id == first_executor
+    stale_lease_snapshot = await first_repository.get_run(owner, active.response.id)
+    renewed_expiry = datetime.now(UTC) + timedelta(seconds=60)
+    await first_repository.renew_run_execution(
+        owner, active.response.id, first_executor, renewed_expiry
+    )
+    await first_repository.transition_run(
+        stale_lease_snapshot,
+        "agent.run.lease_probe",
+        {"status": AgentRunStatus.QUEUED.value},
+        frozenset({AgentRunStatus.QUEUED}),
+        first_executor,
+    )
+    assert (
+        await first_repository.get_run(owner, active.response.id)
+    ).execution_lease_expires_at == renewed_expiry
+    assert active.response.id not in {
+        run.response.id for run in await second_repository.list_recoverable_runs(datetime.now(UTC))
+    }
+    with pytest.raises(AgentExecutionOwned):
+        await second_repository.claim_run_execution(
+            owner,
+            active.response.id,
+            second_executor,
+            datetime.now(UTC) + timedelta(seconds=30),
+        )
+    await first_repository.renew_run_execution(
+        owner,
+        active.response.id,
+        first_executor,
+        datetime.now(UTC) - timedelta(seconds=1),
+    )
+    claimed = await second_repository.claim_run_execution(
+        owner,
+        active.response.id,
+        second_executor,
+        datetime.now(UTC) + timedelta(seconds=30),
+    )
+    assert claimed.executor_id == second_executor
+    await second_repository.release_run_execution(owner, active.response.id, second_executor)
+
     stale = await second_repository.get_run(owner, active.response.id)
     cancelling = await first_repository.get_run(owner, active.response.id)
     cancelling.response = cancelling.response.model_copy(
@@ -317,6 +418,148 @@ async def test_agent_database_enforces_concurrency_cas_and_owner_relationships()
             "DELETE FROM conversations WHERE owner_id = :owner",
         ):
             await connection.execute(text(statement), {"owner": owner})
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_agent_approval_survives_gateway_recreation_and_rejects_once(
+    tmp_path: Path,
+) -> None:
+    owner = f"agent-approval-{uuid4().hex}"
+    tool_arguments = {"value": "fixed"}
+    final_text = '{"text":"rejected safely"}'
+    provider = FakeAgentProvider(
+        event_batches=[
+            [
+                ProviderEvent(event_type=ProviderEventType.RESPONSE_STARTED),
+                ProviderEvent(
+                    event_type=ProviderEventType.TOOL_PROPOSED,
+                    data={
+                        "callId": "call-persisted-approval",
+                        "name": "persisted_costly_probe",
+                        "arguments": tool_arguments,
+                        "argumentsJson": '{"value":"fixed"}',
+                    },
+                ),
+                ProviderEvent(event_type=ProviderEventType.RESPONSE_COMPLETED),
+            ],
+            [
+                ProviderEvent(event_type=ProviderEventType.RESPONSE_STARTED),
+                ProviderEvent(
+                    event_type=ProviderEventType.TEXT_DELTA,
+                    data={"delta": final_text},
+                ),
+                ProviderEvent(event_type=ProviderEventType.RESPONSE_COMPLETED),
+            ],
+        ]
+    )
+    settings = GatewaySettings(
+        _env_file=None,
+        persistence_enabled=True,
+        database_url=DATABASE_URL,
+        storage_root=tmp_path,
+        agent_enabled=True,
+        agent_api_key="test-key",
+        agent_base_url="https://provider.invalid/v1",
+        agent_tools_enabled=True,
+    )
+    registry = persisted_tool_registry()
+    inventory, sessions = components()
+    first_app = create_app(
+        settings,
+        inventory_service=inventory,
+        compute_session_service=sessions,
+        agent_provider=provider,
+        agent_tool_registry=registry,
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=first_app), base_url="http://test"
+    ) as client:
+        headers = {"X-Oneiroi-User": owner}
+        conversation = await client.post(
+            "/v1/conversations", headers=headers, json={"title": "Approval persistence"}
+        )
+        created = await client.post(
+            "/v1/agent/runs",
+            headers={**headers, "Idempotency-Key": "persisted-approval-1"},
+            json={
+                "conversationId": conversation.json()["id"],
+                "message": "request approval",
+                "draftSnapshot": {"prompt": "lake"},
+            },
+        )
+        run_id = created.json()["id"]
+        for _ in range(100):
+            snapshot = await client.get(f"/v1/agent/runs/{run_id}", headers=headers)
+            if snapshot.json()["status"] == "waiting_approval":
+                break
+            await asyncio.sleep(0.01)
+        assert snapshot.json()["status"] == "waiting_approval"
+    first_repository = first_app.state.agent_runtime.repository
+    tool_call = (await first_repository.list_tool_calls(owner, run_id))[0]
+    await first_app.state.agent_runtime.close()
+    await first_app.state.database_engine.dispose()
+
+    second_inventory, second_sessions = components()
+    second_app = create_app(
+        settings,
+        inventory_service=second_inventory,
+        compute_session_service=second_sessions,
+        agent_provider=provider,
+        agent_tool_registry=registry,
+    )
+    assert await second_app.state.agent_runtime.recover_incomplete() == [run_id]
+    async with AsyncClient(
+        transport=ASGITransport(app=second_app), base_url="http://test"
+    ) as client:
+        headers = {"X-Oneiroi-User": owner}
+        hidden = await client.post(
+            f"/v1/agent/tool-calls/{tool_call.response.id}/reject",
+            headers={"X-Oneiroi-User": f"{owner}-other"},
+            json={},
+        )
+        rejected = await client.post(
+            f"/v1/agent/tool-calls/{tool_call.response.id}/reject",
+            headers=headers,
+            json={"note": "reject after restart"},
+        )
+        for _ in range(100):
+            snapshot = await client.get(f"/v1/agent/runs/{run_id}", headers=headers)
+            if snapshot.json()["status"] == "completed":
+                break
+            await asyncio.sleep(0.01)
+        repeated = await client.post(
+            f"/v1/agent/tool-calls/{tool_call.response.id}/reject",
+            headers=headers,
+            json={},
+        )
+    assert hidden.status_code == 404
+    assert rejected.json()["approval"]["status"] == "rejected"
+    assert repeated.json()["approval"]["status"] == "rejected"
+    assert snapshot.json()["status"] == "completed"
+
+    engine = second_app.state.database_engine
+    async with engine.begin() as connection:
+        tool_count = await connection.scalar(
+            text("SELECT count(*) FROM agent_tool_calls WHERE owner_id = :owner"),
+            {"owner": owner},
+        )
+        approval_count = await connection.scalar(
+            text("SELECT count(*) FROM agent_approvals WHERE owner_id = :owner"),
+            {"owner": owner},
+        )
+        assert tool_count == approval_count == 1
+        for statement in (
+            "DELETE FROM agent_events WHERE owner_id = :owner",
+            "DELETE FROM agent_approvals WHERE owner_id = :owner",
+            "DELETE FROM agent_tool_calls WHERE owner_id = :owner",
+            "DELETE FROM agent_messages WHERE owner_id = :owner",
+            "DELETE FROM agent_runs WHERE owner_id = :owner",
+            "DELETE FROM agent_threads WHERE owner_id = :owner",
+            "DELETE FROM conversations WHERE owner_id = :owner",
+        ):
+            await connection.execute(text(statement), {"owner": owner})
+    await second_app.state.agent_runtime.close()
     await engine.dispose()
 
 

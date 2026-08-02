@@ -75,6 +75,8 @@ Fail-closed states include:
 
 Image input and image generation remain independently disabled unless both their feature flag and matching probe capability are present.
 
+Controlled function tools are also independently fail closed. `toolsEnabled` is true only when the core Agent is available, `ONEIROI_GATEWAY_AGENT_TOOLS_ENABLED=true`, and the endpoint/model-bound probe reports `functionTools=supported`. Only then does the capability response expose the server registry's safe tool names, risk levels, approval requirements, and configured turn/tool/approval budgets. A test-injected provider may explicitly declare tools available without a capability file; production provider construction does not bypass the probe.
+
 ## Current external blockers
 
 No real provider canary is claimed by repository tests. Before canary activation an operator must:

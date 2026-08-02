@@ -35,6 +35,20 @@ class AgentProbeRecord(ContractModel):
     probed_at: datetime
 
 
+class AgentToolRisk(StrEnum):
+    READ = "read"
+    PROPOSAL = "proposal"
+    WRITE = "write"
+    COSTLY = "costly"
+    DESTRUCTIVE = "destructive"
+
+
+class AgentToolCapability(ContractModel):
+    name: str
+    risk: AgentToolRisk
+    requires_approval: bool
+
+
 class AgentCapabilitiesResponse(ContractModel):
     enabled: bool
     configured: bool
@@ -51,6 +65,11 @@ class AgentCapabilitiesResponse(ContractModel):
     transports: list[Literal["sse", "websocket"]] = Field(default_factory=list)
     websocket_declared: bool = False
     websocket_verified: bool = False
+    tools_enabled: bool = False
+    tools: list[AgentToolCapability] = Field(default_factory=list, max_length=32)
+    max_turns: int = Field(default=0, ge=0)
+    max_tool_calls: int = Field(default=0, ge=0)
+    max_approvals: int = Field(default=0, ge=0)
 
 
 class AgentThreadStatus(StrEnum):
@@ -91,14 +110,6 @@ class AgentRunStatus(StrEnum):
             AgentRunStatus.FAILED,
             AgentRunStatus.EXPIRED,
         }
-
-
-class AgentToolRisk(StrEnum):
-    READ = "read"
-    PROPOSAL = "proposal"
-    WRITE = "write"
-    COSTLY = "costly"
-    DESTRUCTIVE = "destructive"
 
 
 class AgentToolCallStatus(StrEnum):
@@ -248,6 +259,11 @@ class AgentToolCallResponse(ContractModel):
     finished_at: datetime | None = None
 
 
+class AgentApprovalDecision(ContractModel):
+    note: Annotated[str | None, Field(default=None, max_length=500)]
+    client_version: Annotated[str | None, Field(default=None, max_length=64)]
+
+
 class AgentApprovalResponse(ContractModel):
     id: str
     run_id: str
@@ -258,3 +274,9 @@ class AgentApprovalResponse(ContractModel):
     expires_at: datetime
     decided_at: datetime | None = None
     consumed_at: datetime | None = None
+
+
+class AgentToolDecisionResponse(ContractModel):
+    tool_call: AgentToolCallResponse
+    approval: AgentApprovalResponse
+    run: AgentRunResponse

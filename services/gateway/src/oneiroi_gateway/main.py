@@ -9,6 +9,7 @@ from oneiroi_common.identity import SERVICE_ASSERTION_HEADER
 from oneiroi_common.jobs import QueueTier
 from oneiroi_gateway.agent.openai_responses import OpenAIResponsesProvider
 from oneiroi_gateway.agent.protocol import AgentProvider
+from oneiroi_gateway.agent.registry import ToolRegistry, builtin_tool_registry
 from oneiroi_gateway.agent.runtime import AgentRuntime
 from oneiroi_gateway.db.session import create_engine, create_session_factory
 from oneiroi_gateway.gpu_server import (
@@ -74,6 +75,7 @@ def create_app(
     agent_repository: AgentRepository | None = None,
     agent_provider: AgentProvider | None = None,
     agent_runtime: AgentRuntime | None = None,
+    agent_tool_registry: ToolRegistry | None = None,
     repository: StudioRepository | None = None,
     job_dispatcher: JobDispatcher | None = None,
     job_executor: JobExecutor | None = None,
@@ -160,7 +162,10 @@ def create_app(
     capability_service = capability_service or CapabilityService(
         hq_installed=not app_settings.gpu_server_enabled
     )
-    agent_capability_service = agent_capability_service or AgentCapabilityService(app_settings)
+    agent_tool_registry = agent_tool_registry or builtin_tool_registry()
+    agent_capability_service = agent_capability_service or AgentCapabilityService(
+        app_settings, agent_tool_registry
+    )
     database_engine = None
     database_sessions = None
     if repository is None:
@@ -178,7 +183,9 @@ def create_app(
             if database_sessions is not None
             else InMemoryAgentRepository()
         )
-    if agent_provider is None and agent_capability_service.get().available:
+    agent_provider_injected = agent_provider is not None
+    agent_capabilities = agent_capability_service.get()
+    if agent_provider is None and agent_capabilities.available:
         assert app_settings.agent_api_key is not None
         agent_provider = OpenAIResponsesProvider(
             app_settings.agent_base_url,
@@ -198,6 +205,8 @@ def create_app(
         repository,
         agent_provider,
         app_settings,
+        agent_tool_registry,
+        tools_available=(agent_provider_injected or agent_capabilities.function_tools),
     )
     artifacts = ArtifactService(
         repository,

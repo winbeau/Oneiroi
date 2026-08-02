@@ -6,11 +6,13 @@ from fastapi import APIRouter, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from oneiroi_common.agent import (
+    AgentApprovalDecision,
     AgentCapabilitiesResponse,
     AgentMessageResponse,
     AgentRunCreate,
     AgentRunResponse,
     AgentThreadResponse,
+    AgentToolDecisionResponse,
 )
 from oneiroi_gateway.agent.runtime import AgentRuntime, AgentRuntimeError
 from oneiroi_gateway.services.agent_capabilities import AgentCapabilityService
@@ -126,6 +128,42 @@ def create_agent_router(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @router.post(
+        "/v1/agent/tool-calls/{tool_call_id}/approve",
+        response_model=AgentToolDecisionResponse,
+        response_model_by_alias=True,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def approve_tool_call(
+        tool_call_id: str,
+        payload: AgentApprovalDecision,
+        user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
+    ) -> AgentToolDecisionResponse:
+        try:
+            return await runtime.approve_tool_call(user, tool_call_id, payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+        except AgentRuntimeError as exc:
+            raise _http_error(exc) from exc
+
+    @router.post(
+        "/v1/agent/tool-calls/{tool_call_id}/reject",
+        response_model=AgentToolDecisionResponse,
+        response_model_by_alias=True,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def reject_tool_call(
+        tool_call_id: str,
+        payload: AgentApprovalDecision,
+        user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
+    ) -> AgentToolDecisionResponse:
+        try:
+            return await runtime.reject_tool_call(user, tool_call_id, payload)
+        except KeyError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
+        except AgentRuntimeError as exc:
+            raise _http_error(exc) from exc
 
     @router.post(
         "/v1/agent/runs/{run_id}/cancel",
