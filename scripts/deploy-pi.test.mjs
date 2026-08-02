@@ -1,21 +1,35 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const script = new URL("deploy-pi.sh", import.meta.url);
-const deploymentScript = new URL("../deploy/deploy.sh", import.meta.url);
+const script = fileURLToPath(new URL("deploy-pi.sh", import.meta.url));
+const deploymentScript = fileURLToPath(new URL("../deploy/deploy.sh", import.meta.url));
+const bash = resolveBash();
+
+function resolveBash() {
+  if (process.env.ONEIROI_TEST_BASH) return process.env.ONEIROI_TEST_BASH;
+  if (process.platform !== "win32") return "bash";
+  const candidates = [
+    path.join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "bin", "bash.exe"),
+    path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Git", "bin", "bash.exe"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? "bash";
+}
 
 function run(...args) {
-  return spawnSync(script.pathname, args, { encoding: "utf8" });
+  return spawnSync(bash, [script, ...args], { encoding: "utf8" });
 }
 
 test("top-level deploy exposes internal-only and combined modes", () => {
-  const result = spawnSync("bash", [deploymentScript.pathname, "--help"], { encoding: "utf8" });
+  const result = spawnSync(bash, [deploymentScript, "--help"], { encoding: "utf8" });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /deploy\/deploy\.sh --internal/);
   assert.match(result.stdout, /deploy\/deploy\.sh\s+Deploy LAN and public endpoints/);
 
-  const invalid = spawnSync("bash", [deploymentScript.pathname, "--unknown"], {
+  const invalid = spawnSync(bash, [deploymentScript, "--unknown"], {
     encoding: "utf8",
   });
   assert.notEqual(invalid.status, 0);
