@@ -48,15 +48,23 @@ pnpm dev:host
 # http://<本机内网IP>:5173
 ```
 
-Pi5 内网一键部署使用完整 edge 脚本，而不是直接运行 Web foreground 命令：
+Pi5 统一部署入口：
 
 ```bash
 cd ~/oneiroi-studio
-scripts/deploy-pi.sh lan --host 192.168.3.250 \
-  --gateway-url http://10.30.176.95:18000
+
+# 仅内网；停止并禁用公网 BFF/Web/Tunnel
+bash deploy/deploy.sh --internal
+
+# 同时部署内网和公网
+bash deploy/deploy.sh
 ```
 
-脚本会先停止并禁用 `cloudflared-video.service`，再 fast-forward、frozen install、构建 immutable Web、备份现有 env/unit、将 BFF 切到 development identity、安装并重启 BFF/Web user services，最后验证 loopback BFF 和 LAN origin health。`bff.env` 必须预先包含 Pi→H100 service assertion 私钥配置；脚本只更新模式、Gateway、Origin 和 timeout，不创建或打印凭据。重复部署时可省略 `--gateway-url` 以保留当前值。
+内网固定为 `https://video-in.icthub.top`，使用 development/no-login BFF `127.0.0.1:8000` 和 LAN Web `192.168.3.250:4173`。脚本会创建专用 ICTHub LAN CA/服务器证书、本地构建 TLS proxy image、启动 split-DNS 与 80/443 proxy，并验证 HTTPS health。LAN CA 位于 `~/.config/oneiroi/lan-pki/ca.crt`，首次使用的客户端必须将该 CA 加入本机信任库。
+
+默认无参数模式额外启动独立的 production BFF `127.0.0.1:8001`、public Web `127.0.0.1:4174` 和 Cloudflare Tunnel。公网 BFF 强制验证 Cloudflare Access JWT；development/no-login BFF 不会被 Tunnel 暴露。两套入口共享 immutable Web release 和 Pi→H100 service assertion，但使用不同的浏览器身份边界。
+
+底层脚本会 fast-forward、frozen install、构建 immutable Web、备份现有 env/unit 并验证所有 health。`bff.env` 必须预先包含 Access JWT 和 Pi→H100 service assertion 配置；脚本不创建或打印服务凭据。可通过 `ONEIROI_LAN_HOST`、`ONEIROI_LAN_HOSTNAME` 和 `ONEIROI_BFF_GATEWAY_BASE_URL` 覆盖默认值。
 
 树莓派安全生产部署：
 

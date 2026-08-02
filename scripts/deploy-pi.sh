@@ -7,6 +7,7 @@ umask 077
 DEPLOYMENT="${1-}"
 [[ $# -eq 0 ]] || shift
 LAN_HOST="${ONEIROI_LAN_HOST:-}"
+LAN_HOSTNAME="${ONEIROI_LAN_HOSTNAME:-}"
 PORT="${ONEIROI_WEB_PORT:-4173}"
 BRANCH="${ONEIROI_GIT_BRANCH:-main}"
 RELEASE_SHA="${ONEIROI_RELEASE_SHA:-}"
@@ -25,6 +26,7 @@ Required:
 
 Options:
   --port PORT            Web port (default: 4173)
+  --hostname NAME        Add split-DNS HTTPS, for example video-in.icthub.top
   --gateway-url URL      H100 BFF URL; otherwise preserve bff.env's current value
   --branch NAME          Git branch to fast-forward (default: main)
   --release-sha SHA      Require the deployed checkout to match this commit
@@ -34,6 +36,7 @@ Options:
 
 Example:
   scripts/deploy-pi.sh lan --host 192.168.3.250 \
+    --hostname video-in.icthub.top \
     --gateway-url http://10.30.176.95:18000
 EOF
 }
@@ -59,6 +62,11 @@ while (($#)); do
         --port)
             [[ -n "${2-}" ]] || fail "--port requires a value"
             PORT="$2"
+            shift 2
+            ;;
+        --hostname)
+            [[ -n "${2-}" ]] || fail "--hostname requires a value"
+            LAN_HOSTNAME="$2"
             shift 2
             ;;
         --gateway-url)
@@ -98,6 +106,8 @@ done
 [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT >= 1 && PORT <= 65535)) || fail "invalid port: $PORT"
 [[ -z "$GATEWAY_URL" || "$GATEWAY_URL" =~ ^https?://[^[:space:]]+$ ]] \
     || fail "invalid --gateway-url: $GATEWAY_URL"
+[[ -z "$LAN_HOSTNAME" || "$LAN_HOSTNAME" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] \
+    || fail "invalid --hostname: $LAN_HOSTNAME"
 command -v python3 >/dev/null 2>&1 || fail "required command is missing: python3"
 python3 - "$LAN_HOST" <<'PY' || fail "--host must be an RFC1918 IPv4 LAN address"
 from ipaddress import ip_address, ip_network
@@ -139,9 +149,11 @@ WEB_ENV="$CONFIG_DIR/web.env"
     || fail "$BFF_ENV is missing; install the Pi service assertion configuration first"
 
 # Public access must be removed before development identity mode is enabled.
-systemctl --user disable --now cloudflared-video.service >/dev/null 2>&1 || true
-systemctl --user is-active --quiet cloudflared-video.service \
-    && fail "cloudflared-video.service is still active" || true
+for public_unit in cloudflared-video.service oneiroi-web-public.service oneiroi-bff-public.service; do
+    systemctl --user disable --now "$public_unit" >/dev/null 2>&1 || true
+    systemctl --user is-active --quiet "$public_unit" \
+        && fail "$public_unit is still active" || true
+done
 
 if ((SKIP_PULL == 0)); then
     git fetch origin "$BRANCH"
@@ -214,11 +226,13 @@ fi
     || fail "bff.env has no valid gateway URL; pass --gateway-url"
 
 ORIGIN="http://$LAN_HOST:$PORT"
+ALLOWED_ORIGINS="$ORIGIN"
+[[ -n "$LAN_HOSTNAME" ]] && ALLOWED_ORIGINS="$ALLOWED_ORIGINS,https://$LAN_HOSTNAME"
 upsert_env "$BFF_ENV" \
     "ONEIROI_BFF_ENVIRONMENT=development" \
     "ONEIROI_BFF_GATEWAY_BASE_URL=$GATEWAY_URL" \
     "ONEIROI_BFF_REQUEST_TIMEOUT_SECONDS=1800" \
-    "ONEIROI_BFF_ALLOWED_ORIGINS=$ORIGIN" \
+    "ONEIROI_BFF_ALLOWED_ORIGINS=$ALLOWED_ORIGINS" \
     "ONEIROI_BFF_REQUIRE_INBOUND_SERVICE_AUTH=false"
 upsert_env "$WEB_ENV" \
     "ONEIROI_RELEASE_SHA=$RELEASE_SHA" \
@@ -252,9 +266,15 @@ systemctl --user is-active --quiet oneiroi-bff.service oneiroi-web.service \
 systemctl --user is-active --quiet cloudflared-video.service \
     && fail "public video Tunnel unexpectedly became active" || true
 
+if [[ -n "$LAN_HOSTNAME" ]]; then
+    "$REPO_DIR/deploy/pi/lan/install-domain.sh" \
+        --host "$LAN_HOST" --hostname "$LAN_HOSTNAME" --upstream-port "$PORT"
+fi
+
 printf '%s\n' \
     "[oneiroi-pi] LAN deployment complete" \
     "URL:        $ORIGIN" \
+    "HTTPS:      ${LAN_HOSTNAME:+https://$LAN_HOSTNAME}" \
     "Release:    $RELEASE_SHA" \
     "Gateway:    $GATEWAY_URL" \
     "Tunnel:     disabled/inactive" \
