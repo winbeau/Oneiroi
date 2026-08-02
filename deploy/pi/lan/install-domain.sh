@@ -75,8 +75,9 @@ openssl x509 -req -sha256 -days 365 \
     -in "$SERVER_CSR" -CA "$CA_CERT" -CAkey "$CA_KEY" \
     -CAserial "$PKI_DIR/ca.srl" -CAcreateserial \
     -out "$SERVER_CERT" -extfile "$SERVER_EXT" >/dev/null 2>&1
-chmod 600 "$CA_KEY" "$SERVER_KEY"
-chmod 644 "$CA_CERT" "$SERVER_CERT"
+chmod 600 "$CA_KEY"
+# Docker user-namespace remapping must be able to read only the serving leaf key.
+chmod 644 "$CA_CERT" "$SERVER_CERT" "$SERVER_KEY"
 rm -f "$SERVER_CSR" "$SERVER_EXT"
 
 for container in video-in-proxy video-in-tls video-in-dns; do
@@ -85,7 +86,8 @@ done
 
 docker run -d --name video-in-dns --restart unless-stopped --network host \
     --read-only --pids-limit 16 --memory 64m --ulimit nofile=512:512 \
-    --cap-drop ALL --cap-add NET_BIND_SERVICE --security-opt no-new-privileges \
+    --cap-drop ALL --cap-add NET_BIND_SERVICE --cap-add SETUID --cap-add SETGID \
+    --security-opt no-new-privileges \
     "$DNS_IMAGE" "$DNSMASQ_BIN" \
     --keep-in-foreground --log-facility=- --port=53 \
     --listen-address="$LAN_HOST" --bind-interfaces --no-hosts --no-resolv \
