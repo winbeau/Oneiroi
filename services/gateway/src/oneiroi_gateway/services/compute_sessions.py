@@ -293,6 +293,15 @@ class ComputeSessionService:
             raise KeyError(session_id)
         return session
 
+    def current(self, owner_id: str) -> ComputeSessionSnapshot | None:
+        active = [
+            session
+            for session in self.sessions.values()
+            if session.owner_id == owner_id
+            and session.state is not ComputeSessionState.RELEASED
+        ]
+        return max(active, key=lambda session: session.created_at, default=None)
+
     async def release(
         self,
         owner_id: str,

@@ -13,6 +13,7 @@ import { useComputeUiStore } from "@/store/compute-ui-store";
 const computeKeys = {
   gpus: ["compute", "gpus"] as const,
   capabilities: (sessionId: string) => ["compute", "capabilities", sessionId] as const,
+  currentSession: ["compute", "session", "current"] as const,
   session: (sessionId: string) => ["compute", "session", sessionId] as const,
 };
 
@@ -37,7 +38,16 @@ export function useComputeCapabilities(sessionId = "") {
 
 export function useComputeSession() {
   const sessionId = useComputeUiStore((state) => state.activeSessionId);
-  return useQuery({
+  const setActiveSessionId = useComputeUiStore((state) => state.setActiveSessionId);
+  const clearActiveSession = useComputeUiStore((state) => state.clearActiveSession);
+  const current = useQuery({
+    queryKey: computeKeys.currentSession,
+    queryFn: () => apiRequest<ComputeSession | null>("/v1/compute/sessions/current"),
+    refetchInterval: sessionId ? false : 5_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+  const session = useQuery({
     queryKey: computeKeys.session(sessionId),
     queryFn: () => apiRequest<ComputeSession>(`/v1/compute/sessions/${sessionId}`),
     enabled: Boolean(sessionId),
@@ -48,6 +58,30 @@ export function useComputeSession() {
         ? 2_000
         : false,
   });
+
+  useEffect(() => {
+    if (current.data && current.data.id !== sessionId) {
+      setActiveSessionId(current.data.id);
+      return;
+    }
+    if (session.data?.state === "released") {
+      clearActiveSession();
+      return;
+    }
+    if (current.isSuccess && current.data === null && sessionId && session.isError) {
+      clearActiveSession();
+    }
+  }, [
+    clearActiveSession,
+    current.data,
+    current.isSuccess,
+    session.data?.state,
+    session.isError,
+    sessionId,
+    setActiveSessionId,
+  ]);
+
+  return session;
 }
 
 export function useComputeSessionEvents(session?: ComputeSession) {
@@ -110,6 +144,7 @@ export function useCreateComputeSession() {
       }),
     onSuccess: (session) => {
       setActiveSessionId(session.id);
+      queryClient.setQueryData(computeKeys.currentSession, session);
       queryClient.setQueryData(computeKeys.session(session.id), session);
     },
   });
@@ -135,7 +170,10 @@ export function useReleaseComputeSession() {
       }),
     onSuccess: (session) => {
       queryClient.setQueryData(computeKeys.session(session.id), session);
-      if (session.state === "released") clearActiveSession();
+      if (session.state === "released") {
+        queryClient.setQueryData(computeKeys.currentSession, null);
+        clearActiveSession();
+      }
     },
   });
 }

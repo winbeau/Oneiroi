@@ -321,6 +321,13 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
     ) -> Response:
         return await forward(request, "/v1/compute/sessions", user)
 
+    @router.get("/v1/compute/sessions/current")
+    async def current_compute_session(
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(request, "/v1/compute/sessions/current", user)
+
     @router.get("/v1/compute/sessions/{session_id}")
     async def compute_session(
         session_id: str,

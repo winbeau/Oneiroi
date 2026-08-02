@@ -62,12 +62,15 @@ async def test_one_gpu_session_loads_fast_and_releases(compute_app, caplog) -> N
 
         snapshot = await client.get(f"/v1/compute/sessions/{session_id}")
         assert snapshot.json()["slots"][0]["state"] == "ready"
+        current = await client.get("/v1/compute/sessions/current")
+        assert current.json()["id"] == session_id
 
         released = await client.post(
             f"/v1/compute/sessions/{session_id}/release",
             json={"policy": "when_idle"},
         )
         assert released.json()["state"] == "released"
+        assert (await client.get("/v1/compute/sessions/current")).json() is None
 
     assert len(backend.loaded) == 1
     assert len(backend.released) == 1
@@ -113,5 +116,10 @@ async def test_session_owner_isolation(compute_app) -> None:
             f"/v1/compute/sessions/{created.json()['id']}",
             headers={"X-Oneiroi-User": "another-user"},
         )
+        hidden_current = await client.get(
+            "/v1/compute/sessions/current",
+            headers={"X-Oneiroi-User": "another-user"},
+        )
 
     assert hidden.status_code == 404
+    assert hidden_current.json() is None

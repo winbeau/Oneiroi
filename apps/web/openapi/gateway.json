@@ -3096,6 +3096,57 @@
         ]
       }
     },
+    "/v1/compute/sessions/current": {
+      "get": {
+        "operationId": "get_current_session_v1_compute_sessions_current_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ComputeSessionSnapshot"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Current Session V1 Compute Sessions Current Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Current Session",
+        "tags": [
+          "compute"
+        ]
+      }
+    },
     "/v1/compute/sessions/{session_id}": {
       "get": {
         "operationId": "get_session_v1_compute_sessions__session_id__get",

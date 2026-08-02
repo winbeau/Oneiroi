@@ -222,6 +222,7 @@ export async function demoRequest<T>(pathWithQuery: string, init?: RequestInit):
     };
     return session as T;
   }
+  if (path === "/v1/compute/sessions/current" && method === "GET") return session as T;
   if (path.startsWith("/v1/compute/sessions/") && path.endsWith("/release")) {
     const released = { ...session, state: "released" };
     session = null;

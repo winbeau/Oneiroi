@@ -345,6 +345,9 @@ async function mockBackend(page: Page, options: BackendOptions = {}) {
       };
       return json(session, 202);
     }
+    if (path === "/v1/compute/sessions/current" && method === "GET") {
+      return json(session);
+    }
     if (path === "/v1/compute/sessions/compute-e2e" && method === "GET") {
       return json(session);
     }
@@ -521,6 +524,17 @@ test("compute load works when crypto.randomUUID is unavailable", async ({ page }
   await mockBackend(page, { gpuCount: 1 });
   await loadCompute(page);
   await expect(page.getByRole("link", { name: /1 张 H100/ })).toBeVisible();
+});
+
+test("compute control recovers from the owner session without local storage", async ({ page }) => {
+  await mockBackend(page, { gpuCount: 1 });
+  await loadCompute(page);
+
+  await page.evaluate(() => localStorage.removeItem("oneiroi-compute-ui-v1"));
+  await page.reload();
+
+  await expect(page.getByRole("link", { name: /1 张 H100/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "释放资源" })).toBeVisible();
 });
 
 test("compute SSE does not reconnect when a snapshot updates", async ({ page }) => {

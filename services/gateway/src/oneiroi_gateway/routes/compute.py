@@ -71,6 +71,16 @@ def create_compute_router(
         return session
 
     @router.get(
+        "/sessions/current",
+        response_model=ComputeSessionSnapshot | None,
+        response_model_by_alias=True,
+    )
+    async def get_current_session(
+        user: Annotated[str, Header(alias="X-Oneiroi-User")] = "demo-user",
+    ) -> ComputeSessionSnapshot | None:
+        return sessions.current(user)
+
+    @router.get(
         "/sessions/{session_id}",
         response_model=ComputeSessionSnapshot,
         response_model_by_alias=True,
