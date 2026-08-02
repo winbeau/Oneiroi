@@ -29,7 +29,7 @@ The independent worktree started clean on `gpt-agent` at the required starting c
 | A. Provider and configuration | implemented; real canary blocked | `340118be27cd3c4ec71b4bf73dae9fef994ed226` | rotated credential has not been injected into restricted Gateway runtime; real image model/return mode, rate-limit format, and WebSocket support are therefore not claimed |
 | B. Minimal Agent API and prompt assistant | implemented | `f6840c4d816b0fa688f8056482f593dc3bccfc62` | real provider canary remains blocked; deterministic fake-provider implementation is complete |
 | C. Durable Agent runtime | implemented | `f6840c4d816b0fa688f8056482f593dc3bccfc62` | production migration requires later release authorization; local PostgreSQL migration and persistence checks pass |
-| D. Controlled tools and approval | implemented locally; final quality gate pending | — | no local fake-provider blocker; real costly image/Job tools belong to later stages |
+| D. Controlled tools and approval | implemented | `8c189684aef453689abc9bce69b0c7e6b7321172` | real costly image/Job tools belong to later stages; real provider tools remain capability-probe blocked |
 | E. Image generation and assetization | pending | — | real provider image capability remains blocked; fake/base64/file-ID/URL paths can proceed |
 | F. Frontend Agent experience and Job orchestration | pending | — | real video E2E requires a gpu-server Runner; fake Job orchestration can proceed |
 | G. Security, operations, and rollout | pending | — | real Authentik dual-user and production canary require user/operator authorization |
@@ -106,7 +106,9 @@ Quality evidence for Stages B/C implementation commit `f6840c4d816b0fa688f805648
 
 ## Stage D evidence
 
-Implemented locally:
+Implementation commit: `8c189684aef453689abc9bce69b0c7e6b7321172`
+
+Implemented:
 
 - strict server-owned `ToolRegistry` with version, description, recursive strict schema, risk, per-run limit, timeout, bounded result, and handler;
 - owner-safe built-ins: `get_creation_context`, `list_assets`, `get_asset_metadata`, `get_job_snapshot`, and non-mutating `propose_draft_patch`;
@@ -141,6 +143,13 @@ Scope notes:
 - no image generation, Asset creation, video Job creation/retry/cancel, arbitrary network access, or production side effect is enabled by this stage;
 - real provider tools remain externally blocked until a restricted capability probe reports `functionTools=supported`;
 - no Authentik, Cloudflare, Pi/H100 production service, or gpu-server Runner was changed.
+
+Stage D rollback point:
+
+1. Set `ONEIROI_GATEWAY_AGENT_TOOLS_ENABLED=false` to disable the registry and approval execution while retaining text-only Agent behavior.
+2. Set `ONEIROI_GATEWAY_AGENT_ENABLED=false` to stop new Agent runs completely.
+3. Prefer reverting `8c189684aef453689abc9bce69b0c7e6b7321172` while leaving migration `0003` columns and Agent audit rows intact.
+4. Downgrade to `0002_agent_runtime` only after every Gateway version that requires execution leases has stopped; never automate this during a mixed-version rollout.
 
 Stages B/C security and scope notes:
 
