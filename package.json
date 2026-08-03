@@ -16,8 +16,10 @@
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm lint && pnpm typecheck && pnpm build",
     "test:origin": "node --test scripts/serve-web.test.mjs",
-    "test:deploy": "node --test scripts/deploy-pi.test.mjs",
+    "test:deploy": "node --test scripts/deploy-pi.test.mjs scripts/deploy-stack.test.mjs",
     "generate:api": "uv run python scripts/export-gateway-openapi.py && pnpm --filter @oneiroi/web generate:api",
-    "check:api": "pnpm generate:api && git diff --exit-code -- apps/web/openapi/gateway.json apps/web/src/generated/gateway.ts"
+    "check:api": "pnpm generate:api && git diff --exit-code -- apps/web/openapi/gateway.json apps/web/src/generated/gateway.ts",
+    "deploy:cpu": "bash scripts/deploy-cpu.sh",
+    "deploy:gpu": "bash scripts/deploy-gpu.sh"
   }
 }
