@@ -107,6 +107,7 @@ def test_probe_controls_image_capabilities(tmp_path: Path) -> None:
             agent_capability_file=record_path,
             agent_image_input_enabled=True,
             agent_image_enabled=True,
+            agent_image_model="gpt-5.6-sol",
         )
     ).get()
     assert enabled_images.image_input is True
@@ -179,6 +180,7 @@ def test_probe_and_feature_flag_control_safe_tool_capabilities(tmp_path: Path) -
             agent_capability_file=record_path,
             agent_tools_enabled=True,
             agent_image_enabled=True,
+            agent_image_model="gpt-5.6-sol",
         )
     ).get()
     image_tool = next(

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from PIL import Image, PngImagePlugin
@@ -13,6 +14,7 @@ from PIL import Image, PngImagePlugin
 from oneiroi_common.agent import AgentRunStatus
 from oneiroi_common.studio import AssetResponse, GeneratedImageProvenance
 from oneiroi_gateway.agent.fake import FakeAgentProvider
+from oneiroi_gateway.agent.openai_responses import OpenAIResponsesProvider
 from oneiroi_gateway.agent.protocol import (
     AgentProviderError,
     GeneratedImage,
@@ -21,6 +23,7 @@ from oneiroi_gateway.agent.protocol import (
     ProviderErrorCode,
     ProviderEvent,
     ProviderEventType,
+    ProviderRequest,
 )
 from oneiroi_gateway.main import create_app as create_gateway_app
 from oneiroi_gateway.repositories.agent import InMemoryAgentRepository
@@ -744,3 +747,58 @@ async def test_interrupted_image_tool_preserves_known_asset_without_replay(tmp_p
     assert assets[0].id in str(stored_call.response.result)
     assert len(provider.image_requests) == 1
     assert not list(tmp_path.rglob("*.partial"))
+
+
+@pytest.mark.asyncio
+async def test_image_generation_uses_dedicated_client_and_30s_timeout() -> None:
+    """Image-tool requests go to the dedicated image endpoint with its own key and timeout."""
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        body = (
+            'event: response.started\n'
+            'data: {"type":"response.started","response":{"id":"r1"}}\n\n'
+            'event: response.completed\n'
+            'data: {"type":"response.completed","response":{"id":"r1"}}\n\n'
+        )
+        return httpx.Response(200, text=body)
+
+    provider = OpenAIResponsesProvider(
+        "https://text.example/v1",
+        "text-key",
+        model="gpt-5.6-sol",
+        image_model="gpt-image-2",
+        image_base_url="https://image.example/v1",
+        image_api_key="image-key",
+        image_timeout_seconds=30,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        assert provider.image_generation is True
+        assert provider.image_client is not None
+        # Image-tool stream requests must use the dedicated endpoint + key.
+        await _collect(
+            provider.stream_response(
+                ProviderRequest(
+                    model="gpt-image-2",
+                    instructions="Generate.",
+                    input_items=[{"role": "user", "content": []}],
+                    builtin_tools=["image_generation"],
+                    max_output_tokens=1_000,
+                    request_id="image-tool",
+                )
+            )
+        )
+        image_request = requests[-1]
+        assert image_request.url.host == "image.example"
+        assert image_request.headers["authorization"] == "Bearer image-key"
+        # The dedicated client timeout is capped at 30s (read).
+        assert provider.image_client is not None
+        assert provider.image_client.timeout.read == 30
+    finally:
+        await provider.close()
+
+
+async def _collect(events):
+    return [event async for event in events]

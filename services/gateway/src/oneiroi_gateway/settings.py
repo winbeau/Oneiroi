@@ -77,13 +77,19 @@ class GatewaySettings(BaseSettings):
     agent_max_image_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     agent_max_image_pixels: int = Field(default=33_554_432, ge=1, le=100_000_000)
     agent_max_image_edge: int = Field(default=8_192, ge=64, le=16_384)
-    agent_image_tool_timeout_seconds: float = Field(default=180, gt=0, le=1_800)
+    agent_image_tool_timeout_seconds: float = Field(default=30, gt=1, le=1_800)
     agent_max_retries: int = Field(default=2, ge=0, le=5)
     agent_max_retry_delay_seconds: float = Field(default=4, ge=0, le=60)
     agent_capability_file: Path | None = None
     agent_image_input_enabled: bool = False
     agent_image_enabled: bool = False
-    agent_image_model: str = ""
+    # Image generation uses its own provider/model (e.g. gpt-image-2). The API key
+    # and base URL are independent of the text agent; keep them in the deployment
+    # host's runtime config. Image requests time out at 30s (generation ~22s).
+    agent_image_model: str = "gpt-image-2"
+    agent_image_api_key: SecretStr | None = None
+    agent_image_base_url: str = ""
+    agent_image_timeout_seconds: float = Field(default=30, gt=1, le=300)
     agent_image_mode: Literal["responses-tool"] = "responses-tool"
     ltx_git_commit: str = ""
     ltx_distilled_checkpoint_path: str = ""

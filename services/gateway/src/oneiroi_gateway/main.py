@@ -226,6 +226,13 @@ def create_app(
             model=app_settings.agent_model,
             reasoning_effort=app_settings.agent_reasoning_effort,
             image_model=app_settings.agent_image_model or None,
+            image_base_url=app_settings.agent_image_base_url or None,
+            image_api_key=(
+                app_settings.agent_image_api_key.get_secret_value()
+                if app_settings.agent_image_api_key is not None
+                else None
+            ),
+            image_timeout_seconds=app_settings.agent_image_timeout_seconds,
             websocket_declared=app_settings.agent_provider_websocket_declared,
             connect_timeout_seconds=app_settings.agent_connect_timeout_seconds,
             stream_timeout_seconds=app_settings.agent_stream_timeout_seconds,

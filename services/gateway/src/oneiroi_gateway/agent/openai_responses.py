@@ -42,6 +42,9 @@ class OpenAIResponsesProvider:
         model: str,
         reasoning_effort: str = "xhigh",
         image_model: str | None = None,
+        image_base_url: str | None = None,
+        image_api_key: str | None = None,
+        image_timeout_seconds: float | None = None,
         websocket_declared: bool = False,
         connect_timeout_seconds: float = 10,
         stream_timeout_seconds: float = 180,
@@ -67,10 +70,32 @@ class OpenAIResponsesProvider:
             transport=transport,
             trust_env=False,
         )
+        # Optional dedicated image-generation endpoint (independent key/base URL,
+        # e.g. gpt-image-2 with a 30s request timeout). Falls back to the main
+        # client when no image credential is configured.
+        self.image_client: httpx.AsyncClient | None = None
+        if image_api_key:
+            image_timeout = httpx.Timeout(
+                connect=connect_timeout_seconds,
+                read=image_timeout_seconds or stream_timeout_seconds,
+                write=connect_timeout_seconds,
+                pool=connect_timeout_seconds,
+            )
+            self.image_client = httpx.AsyncClient(
+                base_url=f"{(image_base_url or base_url).rstrip('/')}/",
+                headers={
+                    "Authorization": f"Bearer {image_api_key}",
+                    "Accept": "text/event-stream",
+                },
+                timeout=image_timeout,
+                transport=transport,
+                trust_env=False,
+            )
         self.endpoint_hash = provider_endpoint_hash(base_url)
         self.model = model
         self.reasoning_effort = reasoning_effort
         self.image_model = image_model
+        self.image_generation = bool(image_model)
         self.websocket_declared = websocket_declared
         self.max_run_seconds = max_run_seconds
         self.max_retries = max_retries
@@ -118,10 +143,15 @@ class OpenAIResponsesProvider:
         state = _ResponseStreamState(request.tools)
         terminal = False
         response: httpx.Response | None = None
+        client = (
+            self.image_client
+            if "image_generation" in request.builtin_tools and self.image_client is not None
+            else self.client
+        )
         try:
-            http_request = self.client.build_request("POST", "responses", json=payload)
+            http_request = client.build_request("POST", "responses", json=payload)
             response = await asyncio.wait_for(
-                self.client.send(http_request, stream=True),
+                client.send(http_request, stream=True),
                 timeout=_remaining_seconds(deadline),
             )
             if response.status_code >= 400:
@@ -242,7 +272,7 @@ class OpenAIResponsesProvider:
             image_url = httpx.URL(image.url)
         except httpx.InvalidURL:
             raise AgentProviderError(ProviderErrorCode.OUTPUT_INVALID) from None
-        base_url = self.client.base_url
+        base_url = (self.image_client or self.client).base_url
         if (
             image_url.scheme != "https"
             or image_url.host != base_url.host
@@ -257,8 +287,9 @@ class OpenAIResponsesProvider:
     async def _download_generated_image(
         self, target: str | httpx.URL, *, max_bytes: int
     ) -> ResolvedGeneratedImage:
+        client = self.image_client or self.client
         try:
-            async with self.client.stream("GET", target, headers={"Accept": "image/*"}) as response:
+            async with client.stream("GET", target, headers={"Accept": "image/*"}) as response:
                 if response.is_redirect or response.status_code >= 400:
                     raise AgentProviderError(ProviderErrorCode.OUTPUT_INVALID)
                 declared_length = response.headers.get("content-length")
@@ -303,6 +334,8 @@ class OpenAIResponsesProvider:
 
     async def close(self) -> None:
         await self.client.aclose()
+        if self.image_client is not None:
+            await self.image_client.aclose()
 
     @staticmethod
     def _request_payload(request: ProviderRequest) -> dict[str, Any]:

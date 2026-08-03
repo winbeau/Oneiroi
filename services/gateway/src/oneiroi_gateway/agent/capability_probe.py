@@ -300,6 +300,13 @@ async def _run_cli(args: argparse.Namespace) -> int:
         model=settings.agent_model,
         reasoning_effort=settings.agent_reasoning_effort,
         image_model=settings.agent_image_model or None,
+        image_base_url=settings.agent_image_base_url or None,
+        image_api_key=(
+            settings.agent_image_api_key.get_secret_value()
+            if settings.agent_image_api_key is not None
+            else None
+        ),
+        image_timeout_seconds=settings.agent_image_timeout_seconds,
         websocket_declared=settings.agent_provider_websocket_declared,
         connect_timeout_seconds=settings.agent_connect_timeout_seconds,
         stream_timeout_seconds=settings.agent_stream_timeout_seconds,
