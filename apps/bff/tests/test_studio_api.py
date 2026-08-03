@@ -92,6 +92,61 @@ async def test_bff_proxies_conversation_put_and_preserves_owner() -> None:
 
 
 @pytest.mark.asyncio
+async def test_bff_proxies_conversation_delete() -> None:
+    gateway = create_gateway(GatewaySettings())
+    bff = create_bff(BffSettings(gateway_base_url="http://gateway"), gateway_app=gateway)
+    transport = ASGITransport(app=bff)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post(
+            "/v1/conversations",
+            headers={"X-Oneiroi-User": "owner-a"},
+            json={"title": "To delete"},
+        )
+        conversation_id = created.json()["id"]
+        deleted = await client.delete(
+            f"/v1/conversations/{conversation_id}",
+            headers={"X-Oneiroi-User": "owner-a"},
+        )
+        gone = await client.get(
+            f"/v1/conversations/{conversation_id}",
+            headers={"X-Oneiroi-User": "owner-a"},
+        )
+
+    assert deleted.status_code == 204
+    assert gone.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_bff_proxies_prompt_enhance() -> None:
+    gateway = create_gateway(GatewaySettings())
+    bff = create_bff(BffSettings(gateway_base_url="http://gateway"), gateway_app=gateway)
+    transport = ASGITransport(app=bff)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/agent/prompt-enhance",
+            json={"prompt": "a cat walking", "negativePrompt": "flicker"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "AGENT_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_bff_proxies_title_summarize() -> None:
+    gateway = create_gateway(GatewaySettings())
+    bff = create_bff(BffSettings(gateway_base_url="http://gateway"), gateway_app=gateway)
+    transport = ASGITransport(app=bff)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/agent/title-summarize",
+            json={"prompt": "a cat walking in rain"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "AGENT_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
 async def test_production_bff_verifies_access_and_isolates_subjects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

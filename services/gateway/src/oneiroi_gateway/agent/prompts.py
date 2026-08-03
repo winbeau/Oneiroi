@@ -21,7 +21,7 @@ After any necessary tool calls are complete, return exactly one JSON object matc
   "draftProposal": {
     "prompt": "optional improved prompt",
     "negativePrompt": "optional negative prompt",
-    "ratio": "16:9|9:16|1:1",
+    "ratio": "21:9|16:9|4:3|1:1|3:4|9:16",
     "resolution": "720p|1080p",
     "duration": 5,
     "seed": 42,

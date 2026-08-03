@@ -1,13 +1,22 @@
-import { Clock3, PanelLeftClose, Plus, Search, Sparkles } from "lucide-react";
+import { Clock3, PencilLine, PanelLeftClose, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   useConversations,
   useCreateConversation,
+  useDeleteConversation,
   useJobs,
+  useRenameConversation,
 } from "@/features/studio/hooks";
+import type { Conversation } from "@/features/studio/types";
 import { cn } from "@/lib/utils";
 import { useStudioStore } from "@/store/studio-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
@@ -30,6 +39,16 @@ export function WorkspaceSidebar() {
   const conversationsQuery = useConversations();
   const jobsQuery = useJobs();
   const createConversation = useCreateConversation();
+  const deleteConversation = useDeleteConversation();
+  const renameConversation = useRenameConversation();
+  const [pendingDelete, setPendingDelete] = useState<Conversation | null>(null);
+  const [pendingRename, setPendingRename] = useState<Conversation | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [contextMenu, setContextMenu] = useState<{
+    conversation: Conversation;
+    x: number;
+    y: number;
+  } | null>(null);
   const conversations = useMemo(
     () => conversationsQuery.data ?? [],
     [conversationsQuery.data],
@@ -57,6 +76,52 @@ export function WorkspaceSidebar() {
 
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 767px)").matches) setSidebarOpen(false);
+  };
+
+  const openContextMenu = (
+    event: ReactMouseEvent,
+    conversation: Conversation,
+  ) => {
+    event.preventDefault();
+    const x = Math.min(event.clientX, window.innerWidth - 180);
+    const y = Math.min(event.clientY, window.innerHeight - 120);
+    setContextMenu({ conversation, x, y });
+  };
+
+  const closeContextMenu = () => setContextMenu(null);
+
+  const startRename = (conversation: Conversation) => {
+    closeContextMenu();
+    setRenameValue(conversation.title);
+    setPendingRename(conversation);
+  };
+
+  const confirmRename = () => {
+    if (!pendingRename) return;
+    const title = renameValue.trim();
+    if (!title || title === pendingRename.title) {
+      setPendingRename(null);
+      return;
+    }
+    renameConversation.mutate(
+      { conversationId: pendingRename.id, title },
+      { onSettled: () => setPendingRename(null) },
+    );
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    deleteConversation.mutate(pendingDelete.id, {
+      onSuccess: () => {
+        if (activeConversationId === pendingDelete.id) {
+          const remaining = conversations.filter(
+            (item) => item.id !== pendingDelete.id,
+          );
+          setActiveConversation(remaining[0]?.id ?? "");
+        }
+        setPendingDelete(null);
+      },
+    });
   };
 
   return (
@@ -138,32 +203,51 @@ export function WorkspaceSidebar() {
                 const active = conversation.id === activeConversationId;
                 return (
                   <li key={conversation.id}>
-                    <button
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "relative isolate w-full overflow-hidden rounded-md px-2.5 py-2 text-left outline-none",
-                        active
-                          ? "text-[var(--color-text)]"
-                          : "text-[var(--color-text-muted)] hover:bg-white/55",
-                      )}
-                      onClick={() => {
-                        setActiveConversation(conversation.id);
-                        closeOnMobile();
-                      }}
-                      type="button"
+                    <div
+                      className="group relative"
+                      onContextMenu={(event) => openContextMenu(event, conversation)}
                     >
-                      {active && (
-                        <motion.span
-                          aria-hidden="true"
-                          className="absolute inset-0 -z-10 rounded-md bg-[var(--color-accent-soft)]"
-                          layoutId="conversation-active"
-                        />
-                      )}
-                      <span className="block truncate text-sm font-medium">{conversation.title}</span>
-                      <span className="mt-1 block text-[11px] text-[var(--color-text-faint)]">
-                        {relativeTime(conversation.updatedAt)}
-                      </span>
-                    </button>
+                      <button
+                        aria-current={active ? "page" : undefined}
+                        className={cn(
+                          "relative isolate w-full overflow-hidden rounded-md py-2 pl-2.5 pr-9 text-left outline-none",
+                          active
+                            ? "text-[var(--color-text)]"
+                            : "text-[var(--color-text-muted)] hover:bg-white/55",
+                        )}
+                        onClick={() => {
+                          setActiveConversation(conversation.id);
+                          closeOnMobile();
+                        }}
+                        type="button"
+                      >
+                        {active && (
+                          <motion.span
+                            aria-hidden="true"
+                            className="absolute inset-0 -z-10 rounded-md bg-[var(--color-accent-soft)]"
+                            layoutId="conversation-active"
+                          />
+                        )}
+                        <span className="block truncate text-sm font-medium">
+                          {conversation.title}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-[var(--color-text-faint)]">
+                          {relativeTime(conversation.updatedAt)}
+                        </span>
+                      </button>
+                      <button
+                        aria-label={`删除会话 ${conversation.title}`}
+                        className="absolute right-1.5 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-[var(--color-text-faint)] opacity-0 transition hover:bg-white/75 hover:text-[var(--color-danger)] focus-visible:opacity-100 group-hover:opacity-100"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setPendingDelete(conversation);
+                        }}
+                        title="删除会话及其全部生成资产"
+                        type="button"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
                   </li>
                 );
               })}
@@ -189,6 +273,122 @@ export function WorkspaceSidebar() {
           </div>
         </div>
       </aside>
+
+      {contextMenu && (
+        <>
+          <button
+            aria-label="关闭菜单"
+            className="fixed inset-0 z-[80] cursor-default"
+            onClick={closeContextMenu}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              closeContextMenu();
+            }}
+            type="button"
+          />
+          <div
+            className="fixed z-[85] w-40 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-paper)] p-1 shadow-[0_16px_48px_rgba(26,23,20,0.22)]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-[var(--color-text)] transition hover:bg-[var(--color-surface-muted)]"
+              onClick={() => startRename(contextMenu.conversation)}
+              type="button"
+            >
+              <PencilLine className="size-3.5" /> 重命名
+            </button>
+            <button
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-[var(--color-danger)] transition hover:bg-[rgb(184_74_74_/_8%)]"
+              onClick={() => {
+                closeContextMenu();
+                setPendingDelete(contextMenu.conversation);
+              }}
+              type="button"
+            >
+              <Trash2 className="size-3.5" /> 删除会话
+            </button>
+          </div>
+        </>
+      )}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRename(null);
+            setPendingDelete(null);
+          }
+        }}
+        open={pendingRename !== null || pendingDelete !== null}
+      >
+        <DialogContent className="max-w-sm p-5">
+          {pendingRename ? (
+            <>
+              <DialogTitle className="text-sm font-semibold text-[var(--color-text)]">
+                重命名会话
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">
+                为「{pendingRename.title}」设置新名称。
+              </DialogDescription>
+              <input
+                autoFocus
+                className="mt-3 h-9 w-full rounded-md border border-[var(--color-border-strong)] bg-white/90 px-2.5 text-sm outline-none focus:border-[var(--color-accent)]/40 focus:ring-2 focus:ring-[var(--color-accent)]/15"
+                maxLength={100}
+                onChange={(event) => setRenameValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") confirmRename();
+                }}
+                value={renameValue}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  disabled={renameConversation.isPending}
+                  onClick={() => setPendingRename(null)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  取消
+                </Button>
+                <Button
+                  disabled={
+                    renameConversation.isPending || !renameValue.trim()
+                  }
+                  onClick={confirmRename}
+                  size="sm"
+                >
+                  {renameConversation.isPending ? "保存中…" : "保存"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogTitle className="text-sm font-semibold text-[var(--color-text)]">
+                删除会话
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">
+                将删除「{pendingDelete?.title ?? ""}」及其全部生成视频与参考图片资产，且不可恢复。
+              </DialogDescription>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  disabled={deleteConversation.isPending}
+                  onClick={() => setPendingDelete(null)}
+                  size="sm"
+                  variant="ghost"
+                >
+                  取消
+                </Button>
+                <Button
+                  className="bg-[rgb(184_74_74_/_90%)] text-white hover:bg-[rgb(184_74_74)]"
+                  disabled={deleteConversation.isPending}
+                  onClick={confirmDelete}
+                  size="sm"
+                >
+                  {deleteConversation.isPending ? "删除中…" : "确认删除"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

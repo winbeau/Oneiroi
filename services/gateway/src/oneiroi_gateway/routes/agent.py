@@ -14,6 +14,14 @@ from oneiroi_common.agent import (
     AgentThreadResponse,
     AgentToolDecisionResponse,
 )
+from oneiroi_gateway.agent.prompt_enhance import (
+    PromptEnhancer,
+    PromptEnhanceRequest,
+    PromptEnhanceResponse,
+    TitleSummarizeRequest,
+    TitleSummarizeResponse,
+)
+from oneiroi_gateway.agent.protocol import AgentProviderError
 from oneiroi_gateway.agent.runtime import AgentRuntime, AgentRuntimeError
 from oneiroi_gateway.services.agent_capabilities import AgentCapabilityService
 
@@ -21,8 +29,57 @@ from oneiroi_gateway.services.agent_capabilities import AgentCapabilityService
 def create_agent_router(
     capabilities: AgentCapabilityService,
     runtime: AgentRuntime,
+    enhancer: PromptEnhancer | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["agent"])
+
+    @router.post(
+        "/v1/agent/prompt-enhance",
+        response_model=PromptEnhanceResponse,
+        response_model_by_alias=True,
+    )
+    async def prompt_enhance(
+        payload: PromptEnhanceRequest,
+    ) -> PromptEnhanceResponse:
+        if enhancer is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "AGENT_UNAVAILABLE",
+                    "message": "Agent provider is not configured.",
+                },
+            )
+        try:
+            return await enhancer.enhance(payload)
+        except AgentProviderError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"code": exc.code.value, "message": str(exc)},
+            ) from exc
+
+    @router.post(
+        "/v1/agent/title-summarize",
+        response_model=TitleSummarizeResponse,
+        response_model_by_alias=True,
+    )
+    async def title_summarize(
+        payload: TitleSummarizeRequest,
+    ) -> TitleSummarizeResponse:
+        if enhancer is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "AGENT_UNAVAILABLE",
+                    "message": "Prompt enhance provider is not configured.",
+                },
+            )
+        try:
+            return await enhancer.summarize_title(payload)
+        except AgentProviderError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={"code": exc.code.value, "message": str(exc)},
+            ) from exc
 
     @router.get(
         "/v1/agent/capabilities",

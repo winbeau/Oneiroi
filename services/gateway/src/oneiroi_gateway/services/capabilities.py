@@ -16,6 +16,9 @@ class CapabilityService:
         self.hq_installed = hq_installed
 
     def get(self, session: ComputeSessionSnapshot | None = None) -> ComputeCapabilitiesResponse:
+        # Unlocked: availability depends only on installed profiles, so users can always
+        # select fast/hq. Slot readiness and GPU count are surfaced as advisory hints,
+        # never as hard locks on selection or submission.
         fast_available = self.fast_installed
         fast_reason = None if self.fast_installed else "FAST_PROFILE_NOT_INSTALLED"
         hq_available = self.hq_installed
@@ -30,17 +33,13 @@ class CapabilityService:
                 slot.profile is ProfileTier.HQ and slot.state is GpuState.READY
                 for slot in session.slots
             )
-            fast_available = self.fast_installed and ready_fast
             if self.fast_installed and not ready_fast:
                 fast_reason = "FAST_NOT_READY"
-            if session.allocated_gpu_count < 2:
-                hq_available = False
-                hq_reason = ErrorCode.HQ_REQUIRES_AT_LEAST_2_GPUS.value
-            elif self.hq_installed and not ready_hq:
-                hq_available = False
-                hq_reason = ErrorCode.HQ_NOT_READY.value
-            else:
-                hq_available = self.hq_installed and ready_hq
+            if self.hq_installed:
+                if session.allocated_gpu_count < 2:
+                    hq_reason = ErrorCode.HQ_REQUIRES_AT_LEAST_2_GPUS.value
+                elif not ready_hq:
+                    hq_reason = ErrorCode.HQ_NOT_READY.value
 
         return ComputeCapabilitiesResponse(
             profiles=[

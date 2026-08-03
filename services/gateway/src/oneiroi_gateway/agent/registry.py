@@ -103,7 +103,7 @@ class GenerateReferenceImageArguments(ContractModel):
     prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
     negative_prompt: Annotated[str | None, Field(default=None, max_length=2_000)]
     purpose: Literal["first-frame", "last-frame", "style-reference"]
-    ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
+    ratio: Literal["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] = "16:9"
     count: Literal[1, 2] = 1
     reference_asset_ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
         default_factory=list, max_length=4
@@ -445,9 +445,14 @@ async def _generate_reference_image(
                     prompt=parsed.prompt,
                     negativePrompt=parsed.negative_prompt,
                     request_id=f"{context.tool_call_id}-{request_index}",
-                    size={"16:9": "1536x1024", "9:16": "1024x1536", "1:1": "1024x1024"}[
-                        parsed.ratio
-                    ],
+                    size={
+                        "21:9": "1536x1024",
+                        "16:9": "1536x1024",
+                        "4:3": "1024x1024",
+                        "1:1": "1024x1024",
+                        "3:4": "1024x1024",
+                        "9:16": "1024x1536",
+                    }[parsed.ratio],
                     referenceImages=reference_images,
                 )
             )

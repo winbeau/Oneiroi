@@ -202,13 +202,37 @@ def create_proxy_router(gateway: GatewayClient, settings: BffSettings) -> APIRou
     ) -> Response:
         return await forward(request, "/v1/conversations", user)
 
-    @router.api_route("/v1/conversations/{conversation_id}", methods=["GET", "PUT"])
+    @router.api_route("/v1/conversations/{conversation_id}", methods=["GET", "PUT", "DELETE"])
     async def conversation(
         conversation_id: str,
         request: Request,
         user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
     ) -> Response:
         return await forward(request, f"/v1/conversations/{conversation_id}", user)
+
+    @router.post("/v1/agent/prompt-enhance")
+    async def agent_prompt_enhance(
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(
+            request,
+            "/v1/agent/prompt-enhance",
+            user,
+            maximum_bytes=settings.max_agent_json_bytes,
+        )
+
+    @router.post("/v1/agent/title-summarize")
+    async def agent_title_summarize(
+        request: Request,
+        user: Annotated[str | None, Header(alias="X-Oneiroi-User")] = None,
+    ) -> Response:
+        return await forward(
+            request,
+            "/v1/agent/title-summarize",
+            user,
+            maximum_bytes=settings.max_agent_json_bytes,
+        )
 
     @router.get("/v1/agent/capabilities")
     async def agent_capabilities(

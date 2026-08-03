@@ -47,6 +47,14 @@ class GatewaySettings(BaseSettings):
     agent_api_key: SecretStr | None = None
     agent_base_url: str = ""
     agent_model: str = "gpt-5.6-sol"
+    # Dedicated DeepSeek-backed prompt enhancement. The operator fills url/key in .env.
+    prompt_enhance_enabled: bool = False
+    prompt_enhance_base_url: str = "https://api.deepseek.com"
+    prompt_enhance_api_key: SecretStr | None = None
+    prompt_enhance_model: str = "deepseek-chat"
+    # Fast model used for automatic conversation titles (e.g. deepseek-v4-flash).
+    prompt_enhance_title_model: str = "deepseek-v4-flash"
+    prompt_enhance_timeout_seconds: float = Field(default=45, gt=1, le=300)
     agent_review_model: str = ""
     agent_reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "xhigh"] = "xhigh"
     agent_store: Literal[False] = False

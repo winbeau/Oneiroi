@@ -4,6 +4,7 @@ import errno
 import hashlib
 import io
 import os
+import shutil
 import time
 import warnings
 from collections.abc import Awaitable, Callable
@@ -310,6 +311,40 @@ class ArtifactService:
         await self.repository.delete_asset(owner_id, asset_id)
         if asset.response.source_job_id is None:
             asset.storage_path.unlink(missing_ok=True)
+
+    async def delete_conversation(self, owner_id: str, conversation_id: str) -> None:
+        """Delete a conversation together with its jobs and every generated asset.
+
+        Result videos live inside per-job output directories; frame assets are
+        standalone files. Both the database rows and the storage files are removed.
+        """
+        await self.repository.get_conversation(owner_id, conversation_id)
+        jobs = await self.repository.list_jobs_for_conversation(owner_id, conversation_id)
+        asset_ids: set[str] = set()
+        for job in jobs:
+            draft = job.response.draft
+            if draft.first_frame_asset_id:
+                asset_ids.add(draft.first_frame_asset_id)
+            if draft.last_frame_asset_id:
+                asset_ids.add(draft.last_frame_asset_id)
+            if job.response.output is not None and job.response.output.asset_id:
+                asset_ids.add(job.response.output.asset_id)
+        for asset_id in asset_ids:
+            try:
+                await self.delete_asset(owner_id, asset_id)
+            except KeyError:
+                # Orphaned reference (row or file already gone): skip silently.
+                continue
+        for job in jobs:
+            self.remove_job_directory(job.response.id)
+        await self.repository.delete_conversation(owner_id, conversation_id)
+
+    def remove_job_directory(self, job_id: str) -> None:
+        path = (self.storage_root / "jobs" / job_id).resolve()
+        if not path.is_relative_to(self.storage_root):
+            raise ValueError("invalid job id")
+        if path.exists():
+            shutil.rmtree(path)
 
     def job_directory(self, job_id: str) -> Path:
         path = (self.storage_root / "jobs" / job_id).resolve()

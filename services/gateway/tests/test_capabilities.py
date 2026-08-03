@@ -32,7 +32,7 @@ def make_inventory(count: int) -> GpuInventoryService:
 
 
 @pytest.mark.asyncio
-async def test_one_gpu_session_hard_disables_hq() -> None:
+async def test_one_gpu_session_reports_advisory_hq_reason_but_stays_available() -> None:
     inventory = make_inventory(1)
     sessions = ComputeSessionService(inventory, RecordingComputeBackend())
     app = create_app(
@@ -52,7 +52,9 @@ async def test_one_gpu_session_hard_disables_hq() -> None:
     assert response.status_code == 200
     profiles = {profile["tier"]: profile for profile in response.json()["profiles"]}
     assert profiles["fast"]["available"] is True
-    assert profiles["hq"]["available"] is False
+    # Unlocked: HQ remains selectable even on a single-GPU session, with the
+    # GPU-count constraint surfaced as an advisory reason only.
+    assert profiles["hq"]["available"] is True
     assert (
         profiles["hq"]["unavailableReason"]
         == ErrorCode.HQ_REQUIRES_AT_LEAST_2_GPUS.value

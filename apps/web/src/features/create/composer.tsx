@@ -1,5 +1,6 @@
 import {
   Check,
+  Loader2,
   Plus,
   Sparkles,
   WandSparkles,
@@ -14,10 +15,17 @@ import { GenerationTypePopover } from "@/features/create/generation-type-popover
 import { ModelSelectorPopover } from "@/features/create/model-selector-popover";
 import { useComputeCapabilities, useComputeSession } from "@/features/compute/hooks";
 import {
+  usePromptEnhance,
+  useTitleSummarize,
+} from "@/features/agent/hooks";
+import {
   useCreateConversation,
   useCreateJob,
+  useJobs,
+  useRenameConversation,
   useUploadImage,
 } from "@/features/studio/hooks";
+import { ApiError } from "@/lib/api-client";
 import type {
   GenerationDraft,
   MediaReference,
@@ -32,24 +40,63 @@ function ReferenceSlot({
   onChange,
   onClear,
   className,
+  disabled = false,
 }: {
   label: string;
   reference: MediaReference | null;
   onChange: (file: File) => Promise<void>;
   onClear: () => void;
   className?: string;
+  disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const handleFile = async (file: File | undefined) => {
+    if (file) await onChange(file);
+  };
   return (
     <div
       className={cn(
-        "group relative h-[82px] w-[62px] shrink-0 transition-transform duration-200 ease-out hover:z-30 hover:scale-[1.1]",
+        "group relative h-[82px] w-[62px] shrink-0 transition-transform duration-200 ease-out",
+        !disabled && "hover:z-30 hover:scale-[1.1]",
         className,
       )}
+      onDragEnter={
+        disabled
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              if (event.dataTransfer.types.includes("Files")) setDragActive(true);
+            }
+      }
+      onDragLeave={() => setDragActive(false)}
+      onDragOver={
+        disabled
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }
+      }
+      onDrop={
+        disabled
+          ? undefined
+          : async (event) => {
+              event.preventDefault();
+              setDragActive(false);
+              await handleFile(event.dataTransfer.files?.[0]);
+            }
+      }
     >
       <button
         aria-label={reference ? `更换${label}` : `上传${label}`}
-        className="relative grid size-full place-items-center overflow-hidden rounded-[5px] border border-[var(--color-border-strong)] bg-[var(--color-surface-muted)] text-[var(--color-text-faint)] shadow-[0_2px_6px_rgba(48,46,42,0.08)] transition-colors hover:border-[var(--color-accent)]/35 hover:bg-[var(--color-surface-hover)]"
+        className={cn(
+          "relative grid size-full place-items-center overflow-hidden rounded-[5px] border border-[var(--color-border-strong)] bg-[var(--color-surface-muted)] text-[var(--color-text-faint)] shadow-[0_2px_6px_rgba(48,46,42,0.08)] transition-colors hover:border-[var(--color-accent)]/35 hover:bg-[var(--color-surface-hover)]",
+          dragActive &&
+            "border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] ring-2 ring-[var(--color-accent)]/25",
+          disabled && "cursor-not-allowed opacity-55 hover:border-[var(--color-border-strong)]",
+        )}
+        disabled={disabled}
         onClick={() => inputRef.current?.click()}
         type="button"
       >
@@ -75,6 +122,7 @@ function ReferenceSlot({
         ref={inputRef}
         accept="image/png,image/jpeg,image/webp"
         className="sr-only"
+        disabled={disabled}
         onChange={async (event) => {
           const file = event.target.files?.[0];
           if (file) await onChange(file);
@@ -86,11 +134,17 @@ function ReferenceSlot({
         <button
           aria-label={`移除${label}`}
           className="absolute -right-1.5 -top-1.5 z-10 grid size-5 place-items-center rounded-full border bg-white text-[var(--color-text-muted)] shadow-sm transition-colors hover:text-[var(--color-danger)]"
+          disabled={disabled}
           onClick={onClear}
           type="button"
         >
           <X className="size-2.5" />
         </button>
+      )}
+      {dragActive && !reference && (
+        <span className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[5px] bg-[var(--color-accent)]/10 text-[9px] font-medium text-[var(--color-accent)]">
+          松开上传
+        </span>
       )}
     </div>
   );
@@ -106,7 +160,17 @@ export function Composer() {
   const createConversation = useCreateConversation();
   const createJob = useCreateJob();
   const upload = useUploadImage();
+  const jobsQuery = useJobs();
+  const jobs = jobsQuery.data ?? [];
+  const generating = jobs.some(
+    (job) => !["succeeded", "failed", "cancelled"].includes(job.stage),
+  );
+  const enhancePrompt = usePromptEnhance();
+  const summarizeTitle = useTitleSummarize();
+  const renameConversation = useRenameConversation();
   const [submitted, setSubmitted] = useState(false);
+  const [enhancedFlash, setEnhancedFlash] = useState(false);
+  const [frameDragActive, setFrameDragActive] = useState(false);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState(false);
 
@@ -123,12 +187,15 @@ export function Composer() {
   );
   const canSubmit =
     Boolean(draft.prompt.trim()) &&
+    Boolean(draft.firstFrame) &&
+    !generating &&
     sessionReady &&
     profile?.available === true &&
     !createJob.isPending &&
     !createConversation.isPending;
 
   const uploadReference = async (file: File, field: "firstFrame" | "lastFrame") => {
+    if (generating) return;
     setError("");
     try {
       const asset = await upload.mutateAsync({ file, title: file.name });
@@ -147,11 +214,22 @@ export function Composer() {
     try {
       let conversationId = activeConversationId;
       if (!conversationId) {
-        const conversation = await createConversation.mutateAsync(
-          draft.prompt.slice(0, 18) || "未命名创作",
-        );
+        // Create instantly with a placeholder title; the DeepSeek title summary
+        // runs in the background so conversation creation never blocks on it.
+        const conversation = await createConversation.mutateAsync("未命名创作");
         conversationId = conversation.id;
         setActiveConversation(conversation.id);
+        summarizeTitle.mutate(draft.prompt, {
+          onSuccess: (result) => {
+            renameConversation.mutate({
+              conversationId: conversation.id,
+              title: result.title,
+            });
+          },
+          onError: () => {
+            // Keep the placeholder title when the provider is not configured.
+          },
+        });
       }
       await createJob.mutateAsync({
         conversationId,
@@ -163,6 +241,38 @@ export function Composer() {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "任务提交失败");
     }
+  };
+
+  const modeLabel = draft.lastFrame ? "首尾帧过渡" : "首帧动画";
+
+  const runEnhance = () => {
+    if (generating) return;
+    setError("");
+    enhancePrompt.mutate(
+      { prompt: draft.prompt, negativePrompt: draft.negativePrompt },
+      {
+        onSuccess: (result) => {
+          updateDraft({
+            prompt: result.prompt,
+            negativePrompt: result.negativePrompt ?? "",
+            enhancePrompt: false,
+          });
+          setEnhancedFlash(true);
+          window.setTimeout(() => setEnhancedFlash(false), 2_000);
+        },
+        onError: (nextError) => {
+          if (
+            nextError instanceof ApiError &&
+            [404, 502, 503].includes(nextError.status)
+          ) {
+            // Agent unavailable: fall back to server-side enhance flag.
+            updateDraft({ enhancePrompt: !draft.enhancePrompt });
+          } else {
+            setError(nextError instanceof Error ? nextError.message : "Prompt 增强失败");
+          }
+        },
+      },
+    );
   };
 
   const selectProfile = (next: ProfileCapability) => {
@@ -195,9 +305,40 @@ export function Composer() {
         onSubmit={submit}
       >
         <div className="flex flex-col gap-2.5 md:flex-row">
-          <div className="flex min-h-[112px] shrink-0 items-center justify-center px-3 pb-1 pt-3 md:w-[132px] md:self-stretch md:px-1 md:py-0">
+          <div
+            className="relative flex min-h-[112px] shrink-0 items-center justify-center px-3 pb-1 pt-3 md:w-[132px] md:self-stretch md:px-1 md:py-0"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              if (event.dataTransfer.types.includes("Files")) setFrameDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget === event.target) setFrameDragActive(false);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={async (event) => {
+              event.preventDefault();
+              setFrameDragActive(false);
+              const file = event.dataTransfer.files?.[0];
+              if (!file) return;
+              // 智能路由：无首帧时整个区域归首帧，有首帧后归尾帧。
+              if (!draft.firstFrame) {
+                await uploadReference(file, "firstFrame");
+              } else if (!draft.lastFrame) {
+                await uploadReference(file, "lastFrame");
+              }
+            }}
+          >
+            {frameDragActive && (
+              <span className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[7px] border border-dashed border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] text-[11px] font-medium text-[var(--color-accent)]">
+                松开上传{draft.firstFrame ? "到尾帧" : "到首帧"}
+              </span>
+            )}
             <ReferenceSlot
               className="z-0 -rotate-[9deg] translate-x-2 translate-y-1"
+              disabled={generating}
               label="首帧"
               onChange={(file) => uploadReference(file, "firstFrame")}
               onClear={() => updateDraft({ firstFrame: null })}
@@ -205,16 +346,21 @@ export function Composer() {
             />
             <ReferenceSlot
               className="z-10 -ml-4 rotate-[8deg] translate-y-2"
+              disabled={generating}
               label="尾帧"
               onChange={(file) => uploadReference(file, "lastFrame")}
               onClear={() => updateDraft({ lastFrame: null })}
               reference={draft.lastFrame}
             />
+            <span className="pointer-events-none absolute bottom-0.5 right-1 z-20 rounded-full bg-black/45 px-1.5 py-0.5 text-[8px] font-medium text-white">
+              {modeLabel}
+            </span>
           </div>
           <label className="relative min-w-0 flex-1 rounded-[7px] bg-[var(--color-canvas)]/72 px-3 pb-7 pt-2.5 ring-1 ring-inset ring-[var(--color-border)]">
             <span className="sr-only">生成提示词</span>
             <textarea
               className="min-h-[94px] w-full resize-none bg-transparent text-sm leading-6 outline-none"
+              disabled={generating}
               onChange={(event) => updateDraft({ prompt: event.target.value })}
               placeholder="描述主体动作、镜头变化、光线与声音……"
               rows={3}
@@ -245,22 +391,43 @@ export function Composer() {
             value={draft.duration}
           />
           <button
-            aria-pressed={draft.enhancePrompt}
+            aria-pressed={draft.enhancePrompt || enhancedFlash}
             className={cn(
               "ml-auto inline-flex h-9 items-center gap-1.5 rounded-[5px] px-2.5 text-xs transition",
-              draft.enhancePrompt
+              draft.enhancePrompt || enhancedFlash
                 ? "bg-[var(--color-accent-soft)] font-medium text-[var(--color-accent)]"
                 : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)]",
             )}
-            onClick={() => updateDraft({ enhancePrompt: !draft.enhancePrompt })}
+            disabled={enhancePrompt.isPending || !draft.prompt.trim() || generating}
+            onClick={runEnhance}
+            title={
+              draft.enhancePrompt
+                ? "当前由算力服务端增强；点击可改用 Agent 增强"
+                : "使用 Agent 优化提示词"
+            }
             type="button"
           >
-            <WandSparkles className="size-3.5" /> Prompt 增强
+            {enhancePrompt.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : enhancedFlash ? (
+              <Check className="size-3.5" />
+            ) : (
+              <WandSparkles className="size-3.5" />
+            )}{" "}
+            {enhancedFlash ? "已增强" : "Prompt 增强"}
           </button>
           <Button
             disabled={!canSubmit}
             size="md"
-            title={!sessionReady ? "请先前往算力页热加载 GPU" : undefined}
+            title={
+              generating
+                ? "视频生成中，暂不可编辑"
+                : !draft.firstFrame
+                  ? "请先上传首帧图片"
+                  : !sessionReady
+                    ? "请先前往算力页热加载 GPU"
+                    : undefined
+            }
             type="submit"
             variant="primary"
           >
@@ -270,6 +437,17 @@ export function Composer() {
             </span>
           </Button>
         </div>
+        {generating && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--color-accent)]">
+            <Loader2 className="size-3.5 animate-spin" />
+            视频生成中，对话框已锁定；完成后即可继续编辑
+          </p>
+        )}
+        {!draft.firstFrame && draft.prompt.trim() && (
+          <p className="mt-2 text-xs text-[var(--color-warning)]">
+            首帧为必填项，请点击首帧框或拖拽图片到该区域上传
+          </p>
+        )}
         {error && <p className="mt-2 text-xs text-[var(--color-danger)]">{error}</p>}
       </form>
     </div>

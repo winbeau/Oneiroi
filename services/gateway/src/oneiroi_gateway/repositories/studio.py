@@ -68,6 +68,12 @@ class StudioRepository(Protocol):
         self, owner_id: str, conversation_id: str, title: str
     ) -> ConversationResponse: ...
 
+    async def delete_conversation(self, owner_id: str, conversation_id: str) -> None: ...
+
+    async def list_jobs_for_conversation(
+        self, owner_id: str, conversation_id: str
+    ) -> list[StoredJob]: ...
+
     async def create_asset(self, asset: StoredAsset) -> AssetResponse: ...
 
     async def list_assets(self, owner_id: str) -> list[AssetResponse]: ...
@@ -153,6 +159,31 @@ class InMemoryStudioRepository:
         async with self._lock:
             self.conversations[conversation_id] = (owner_id, updated)
         return updated.model_copy(deep=True)
+
+    async def delete_conversation(self, owner_id: str, conversation_id: str) -> None:
+        await self.get_conversation(owner_id, conversation_id)
+        async with self._lock:
+            for job_id in [
+                job_id
+                for job_id, job in self.jobs.items()
+                if job.owner_id == owner_id
+                and job.response.conversation_id == conversation_id
+            ]:
+                self.jobs.pop(job_id, None)
+                self.attempts.pop(job_id, None)
+                self.events.pop(job_id, None)
+            self.conversations.pop(conversation_id, None)
+
+    async def list_jobs_for_conversation(
+        self,
+        owner_id: str,
+        conversation_id: str,
+    ) -> list[StoredJob]:
+        return [
+            job
+            for job in self.jobs.values()
+            if job.owner_id == owner_id and job.response.conversation_id == conversation_id
+        ]
 
     async def create_asset(self, asset: StoredAsset) -> AssetResponse:
         async with self._lock:

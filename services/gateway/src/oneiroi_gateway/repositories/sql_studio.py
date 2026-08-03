@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from oneiroi_common.jobs import JobStatus
@@ -85,6 +85,65 @@ class SqlStudioRepository:
             await session.commit()
             await session.refresh(row)
         return self._conversation(row)
+
+    async def delete_conversation(self, owner_id: str, conversation_id: str) -> None:
+        async with self.sessions() as session:
+            conversation = await session.scalar(
+                select(ConversationModel).where(
+                    ConversationModel.id == conversation_id,
+                    ConversationModel.owner_id == owner_id,
+                )
+            )
+            if conversation is None:
+                raise KeyError(conversation_id)
+            job_ids = list(
+                (await session.scalars(
+                    select(JobModel.id).where(
+                        JobModel.conversation_id == conversation_id,
+                        JobModel.owner_id == owner_id,
+                    )
+                )).all()
+            )
+            if job_ids:
+                await session.execute(
+                    delete(JobAttemptModel).where(JobAttemptModel.job_id.in_(job_ids))
+                )
+                await session.execute(
+                    delete(JobEventModel).where(JobEventModel.job_id.in_(job_ids))
+                )
+                await session.execute(delete(JobModel).where(JobModel.id.in_(job_ids)))
+                # Best-effort cleanup of gpu-server records in the shared database.
+                await session.execute(
+                    text("DELETE FROM gpu_server_job_events WHERE stream_id = ANY(:ids)"),
+                    {"ids": job_ids},
+                )
+                await session.execute(
+                    text("DELETE FROM gpu_server_jobs WHERE external_job_id = ANY(:ids)"),
+                    {"ids": job_ids},
+                )
+            await session.execute(
+                delete(ConversationModel).where(
+                    ConversationModel.id == conversation_id,
+                    ConversationModel.owner_id == owner_id,
+                )
+            )
+            await session.commit()
+
+    async def list_jobs_for_conversation(
+        self,
+        owner_id: str,
+        conversation_id: str,
+    ) -> list[StoredJob]:
+        async with self.sessions() as session:
+            rows = (
+                await session.scalars(
+                    select(JobModel).where(
+                        JobModel.conversation_id == conversation_id,
+                        JobModel.owner_id == owner_id,
+                    )
+                )
+            ).all()
+        return [self._stored_job(row) for row in rows]
 
     async def create_asset(self, asset: StoredAsset) -> AssetResponse:
         response = asset.response

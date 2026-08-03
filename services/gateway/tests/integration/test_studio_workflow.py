@@ -148,6 +148,7 @@ async def test_conversation_upload_job_sse_and_real_mp4(tmp_path: Path) -> None:
 
     assert video.status_code == 200
     assert video.headers["content-type"].startswith("video/mp4")
+    assert "immutable" in video.headers.get("cache-control", "")
     assert b"ftyp" in video.content[:64]
     assert manifest.status_code == 200
     assert manifest.json()["jobId"] == job_id
@@ -161,12 +162,29 @@ async def test_conversation_upload_job_sse_and_real_mp4(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_one_card_hq_job_is_rejected_by_backend(tmp_path: Path) -> None:
+async def test_hq_profile_is_unlocked_and_submitted_with_two_gpus(tmp_path: Path) -> None:
+    """HQ selection is unlocked: capabilities advertise it and a 2-GPU session accepts HQ."""
     app = workflow_app(tmp_path)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Unlocked even without a compute session: availability is not a hard lock.
+        standalone = await client.get("/v1/compute/capabilities")
+        hq_standalone = next(
+            item for item in standalone.json()["profiles"] if item["tier"] == "hq"
+        )
+        assert hq_standalone["available"] is True
+        assert hq_standalone["unavailableReason"] is None
+
+        session = await client.post("/v1/compute/sessions", json={"requestedGpuCount": 2})
+        capabilities = await client.get(
+            f"/v1/compute/capabilities?sessionId={session.json()['id']}"
+        )
+        hq = next(
+            item for item in capabilities.json()["profiles"] if item["tier"] == "hq"
+        )
+        assert hq["available"] is True
+
         conversation = await client.post("/v1/conversations", json={"title": "HQ"})
-        session = await client.post("/v1/compute/sessions", json={"requestedGpuCount": 1})
         response = await client.post(
             "/v1/jobs/i2v",
             json={
@@ -181,8 +199,70 @@ async def test_one_card_hq_job_is_rejected_by_backend(tmp_path: Path) -> None:
             },
         )
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "HQ_REQUIRES_AT_LEAST_2_GPUS"
+    assert response.status_code == 202
+    assert response.json()["draft"]["profile"] == "hq"
+    assert response.json()["profileId"] is not None
+
+
+@pytest.mark.asyncio
+async def test_conversation_delete_cascades_jobs_assets_and_files(tmp_path: Path) -> None:
+    app = workflow_app(tmp_path)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        conversation = await client.post("/v1/conversations", json={"title": "Delete me"})
+        conversation_id = conversation.json()["id"]
+        session = await client.post("/v1/compute/sessions", json={"requestedGpuCount": 1})
+        uploaded = await client.post(
+            "/v1/uploads/images",
+            files={"file": ("frame.png", png_bytes(), "image/png")},
+            data={"title": "首帧"},
+        )
+        frame_asset_id = uploaded.json()["id"]
+
+        created = await client.post(
+            "/v1/jobs/i2v",
+            json={
+                "conversationId": conversation_id,
+                "computeSessionId": session.json()["id"],
+                "draft": {
+                    "prompt": "delete cascade",
+                    "firstFrameAssetId": frame_asset_id,
+                },
+            },
+        )
+        assert created.status_code == 202
+        job_id = created.json()["id"]
+        for _ in range(100):
+            snapshot = await client.get(f"/v1/jobs/{job_id}")
+            if snapshot.json()["stage"] in {"succeeded", "failed"}:
+                break
+            await asyncio.sleep(0.02)
+        assert snapshot.json()["stage"] == "succeeded"
+        result_asset_id = snapshot.json()["output"]["assetId"]
+        assert (await client.get("/v1/assets")).json()
+
+        deleted = await client.delete(f"/v1/conversations/{conversation_id}")
+        assert deleted.status_code == 204
+
+        assert (
+            await client.get(f"/v1/conversations/{conversation_id}")
+        ).status_code == 404
+        assert (
+            await client.get(
+                f"/v1/conversations/{conversation_id}",
+                headers={"X-Oneiroi-User": "another-user"},
+            )
+        ).status_code == 404
+        assert (await client.get("/v1/conversations")).json() == []
+        assert (await client.get("/v1/jobs")).json() == []
+        assert (await client.get("/v1/assets")).json() == []
+        assert (
+            await client.get(f"/v1/assets/{result_asset_id}/file")
+        ).status_code == 404
+        assert (
+            await client.get(f"/v1/assets/{frame_asset_id}/file")
+        ).status_code == 404
+        assert not (tmp_path / "jobs" / job_id).exists()
 
 
 @pytest.mark.asyncio

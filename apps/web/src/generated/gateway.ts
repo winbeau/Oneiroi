@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agent/prompt-enhance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prompt Enhance */
+        post: operations["prompt_enhance_v1_agent_prompt_enhance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agent/runs": {
         parameters: {
             query?: never;
@@ -117,6 +134,23 @@ export interface paths {
         get: operations["list_messages_v1_agent_threads__thread_id__messages_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agent/title-summarize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Title Summarize */
+        post: operations["title_summarize_v1_agent_title_summarize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -357,7 +391,8 @@ export interface paths {
         /** Put Conversation */
         put: operations["put_conversation_v1_conversations__conversation_id__put"];
         post?: never;
-        delete?: never;
+        /** Delete Conversation */
+        delete: operations["delete_conversation_v1_conversations__conversation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1085,7 +1120,7 @@ export interface components {
             /** Prompt */
             prompt?: string | null;
             /** Ratio */
-            ratio?: ("16:9" | "9:16" | "1:1") | null;
+            ratio?: ("21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16") | null;
             /** Resolution */
             resolution?: ("720p" | "1080p") | null;
             /** Seed */
@@ -1119,7 +1154,7 @@ export interface components {
              * Ratio
              * @enum {string}
              */
-            ratio: "16:9" | "9:16" | "1:1";
+            ratio: "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
             /**
              * Safetyoutcome
              * @default accepted
@@ -1195,7 +1230,7 @@ export interface components {
              * @default 16:9
              * @enum {string}
              */
-            ratio: "16:9" | "9:16" | "1:1";
+            ratio: "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
             /**
              * Resolution
              * @default 720p
@@ -1397,6 +1432,20 @@ export interface components {
          * @enum {string}
          */
         ProfileTier: "fast" | "hq";
+        /** PromptEnhanceRequest */
+        PromptEnhanceRequest: {
+            /** Negativeprompt */
+            negativePrompt?: string | null;
+            /** Prompt */
+            prompt: string;
+        };
+        /** PromptEnhanceResponse */
+        PromptEnhanceResponse: {
+            /** Negativeprompt */
+            negativePrompt?: string | null;
+            /** Prompt */
+            prompt: string;
+        };
         /**
          * QueueTier
          * @enum {string}
@@ -1424,6 +1473,16 @@ export interface components {
             status: "ok" | "degraded";
             /** Version */
             version: string;
+        };
+        /** TitleSummarizeRequest */
+        TitleSummarizeRequest: {
+            /** Prompt */
+            prompt: string;
+        };
+        /** TitleSummarizeResponse */
+        TitleSummarizeResponse: {
+            /** Title */
+            title: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1483,6 +1542,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentCapabilitiesResponse"];
+                };
+            };
+        };
+    };
+    prompt_enhance_v1_agent_prompt_enhance_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptEnhanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromptEnhanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1646,6 +1738,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentMessageResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    title_summarize_v1_agent_title_summarize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TitleSummarizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TitleSummarizeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2176,6 +2301,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_conversation_v1_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Oneiroi-User"?: string;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

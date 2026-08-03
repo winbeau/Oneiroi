@@ -31,7 +31,7 @@ class GeneratedImageProvenance(ContractModel):
     model: str
     prompt_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
     purpose: Literal["first-frame", "last-frame", "style-reference"]
-    ratio: Literal["16:9", "9:16", "1:1"]
+    ratio: Literal["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"]
     provider_response_id: str | None = None
     safety_outcome: Literal["accepted"] = "accepted"
     created_at: datetime
@@ -57,7 +57,7 @@ class GenerationDraft(ContractModel):
     negative_prompt: str = ""
     queue: QueueTier = QueueTier.FAST
     profile: ProfileTier = ProfileTier.FAST
-    ratio: Literal["16:9", "9:16", "1:1"] = "16:9"
+    ratio: Literal["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] = "16:9"
     resolution: Literal["720p", "1080p"] = "720p"
     duration: Annotated[int, Field(ge=1, le=15)] = 5
     seed: int = 42

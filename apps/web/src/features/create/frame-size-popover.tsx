@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 type RatioOption = "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 
 const ratios: RatioOption[] = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
-const supportedRatios = new Set<RatioOption>(["16:9", "1:1", "9:16"]);
 
 const ratioShape: Record<RatioOption, string> = {
   "21:9": "h-2.5 w-6",
@@ -48,7 +47,7 @@ export function FrameSizePopover({
         <p className="text-xs font-semibold">选择比例</p>
         <div className="mt-2 grid grid-cols-3 gap-0.5 rounded-[6px] bg-[var(--color-surface-muted)] p-1 sm:grid-cols-6">
           {ratios.map((item) => {
-            const supported = supportedRatios.has(item);
+            const supported = true;
             return (
               <button
                 aria-disabled={!supported}
@@ -64,7 +63,6 @@ export function FrameSizePopover({
                 disabled={!supported}
                 key={item}
                 onClick={() => onRatioChange(item as GenerationDraft["ratio"])}
-                title={supported ? undefined : "等待后端支持"}
                 type="button"
               >
                 <span className={cn("rounded-[2px] border-2 border-current", ratioShape[item])} />

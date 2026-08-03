@@ -8,6 +8,7 @@ from oneiroi_common.api import ServiceHealth
 from oneiroi_common.identity import SERVICE_ASSERTION_HEADER
 from oneiroi_common.jobs import QueueTier
 from oneiroi_gateway.agent.openai_responses import OpenAIResponsesProvider
+from oneiroi_gateway.agent.prompt_enhance import PromptEnhancer
 from oneiroi_gateway.agent.protocol import AgentProvider
 from oneiroi_gateway.agent.registry import ToolRegistry, builtin_tool_registry
 from oneiroi_gateway.agent.runtime import AgentRuntime
@@ -65,6 +66,21 @@ from oneiroi_gateway.settings import GatewaySettings, get_settings
 __version__ = "0.1.0"
 
 
+def _build_prompt_enhancer(app_settings: GatewaySettings) -> PromptEnhancer | None:
+    if not app_settings.prompt_enhance_enabled:
+        return None
+    key = app_settings.prompt_enhance_api_key
+    if key is None or not key.get_secret_value().strip():
+        return None
+    return PromptEnhancer(
+        base_url=app_settings.prompt_enhance_base_url,
+        api_key=key.get_secret_value(),
+        model=app_settings.prompt_enhance_model,
+        title_model=app_settings.prompt_enhance_title_model,
+        timeout_seconds=app_settings.prompt_enhance_timeout_seconds,
+    )
+
+
 def create_app(
     settings: GatewaySettings | None = None,
     *,
@@ -74,6 +90,7 @@ def create_app(
     agent_capability_service: AgentCapabilityService | None = None,
     agent_repository: AgentRepository | None = None,
     agent_provider: AgentProvider | None = None,
+    prompt_enhancer: PromptEnhancer | None = None,
     agent_runtime: AgentRuntime | None = None,
     agent_tool_registry: ToolRegistry | None = None,
     artifact_service: ArtifactService | None = None,
@@ -161,9 +178,7 @@ def create_app(
             lease_ttl_seconds=app_settings.redis_lease_ttl_seconds,
             idle_ttl_seconds=app_settings.compute_idle_ttl_seconds,
         )
-    capability_service = capability_service or CapabilityService(
-        hq_installed=not app_settings.gpu_server_enabled
-    )
+    capability_service = capability_service or CapabilityService()
     agent_tool_registry = agent_tool_registry or builtin_tool_registry(
         image_timeout_seconds=app_settings.agent_image_tool_timeout_seconds
     )
@@ -370,11 +385,17 @@ def create_app(
     app.state.agent_capability_service = agent_capability_service
     app.state.agent_repository = agent_repository
     app.state.agent_runtime = agent_runtime
-    app.include_router(create_agent_router(agent_capability_service, agent_runtime))
+    app.include_router(
+        create_agent_router(
+            agent_capability_service,
+            agent_runtime,
+            enhancer=prompt_enhancer or _build_prompt_enhancer(app_settings),
+        )
+    )
     app.include_router(
         create_compute_router(inventory_service, compute_session_service, capability_service)
     )
-    app.include_router(create_conversation_router(repository))
+    app.include_router(create_conversation_router(repository, artifacts))
     app.include_router(create_asset_router(repository, artifacts))
     app.include_router(create_upload_router(artifacts))
     app.include_router(create_job_router(job_service))

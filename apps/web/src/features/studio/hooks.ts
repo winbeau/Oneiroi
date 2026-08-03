@@ -57,6 +57,7 @@ export function useConversations() {
   return useQuery({
     queryKey: keys.conversations,
     queryFn: () => apiRequest<Conversation[]>("/v1/conversations"),
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -78,6 +79,39 @@ export function useCreateConversation() {
   });
 }
 
+export function useDeleteConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) =>
+      apiRequest<void>(`/v1/conversations/${conversationId}`, { method: "DELETE" }),
+    onSuccess: (_, conversationId) => {
+      queryClient.setQueryData<Conversation[]>(keys.conversations, (items = []) =>
+        items.filter((item) => item.id !== conversationId),
+      );
+      // The conversation's jobs and every generated asset are gone server-side.
+      void queryClient.invalidateQueries({ queryKey: keys.jobs });
+      void queryClient.invalidateQueries({ queryKey: keys.assets });
+    },
+  });
+}
+
+export function useRenameConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
+      apiRequest<Conversation>(`/v1/conversations/${conversationId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      }),
+    onSuccess: (conversation) => {
+      queryClient.setQueryData<Conversation[]>(keys.conversations, (items = []) =>
+        items.map((item) => (item.id === conversation.id ? conversation : item)),
+      );
+    },
+  });
+}
+
 export function useJobs() {
   return useQuery<StudioJob[]>({
     queryKey: keys.jobs,
@@ -93,6 +127,7 @@ export function useJobs() {
       )
         ? 5_000
         : false,
+    staleTime: 30_000,
   });
 }
 
@@ -227,6 +262,9 @@ export function useAssets() {
   return useQuery({
     queryKey: keys.assets,
     queryFn: () => apiRequest<StudioAsset[]>("/v1/assets"),
+    // Assets only change through upload / delete / a finished job; avoid refetching
+    // on every mount and focus. The mutations invalidate or patch the cache directly.
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -1460,9 +1460,12 @@
             "anyOf": [
               {
                 "enum": [
+                  "21:9",
                   "16:9",
-                  "9:16",
-                  "1:1"
+                  "4:3",
+                  "1:1",
+                  "3:4",
+                  "9:16"
                 ],
                 "type": "string"
               },
@@ -1555,9 +1558,12 @@
           },
           "ratio": {
             "enum": [
+              "21:9",
               "16:9",
-              "9:16",
-              "1:1"
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
             ],
             "title": "Ratio",
             "type": "string"
@@ -1690,9 +1696,12 @@
           "ratio": {
             "default": "16:9",
             "enum": [
+              "21:9",
               "16:9",
-              "9:16",
-              "1:1"
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
             ],
             "title": "Ratio",
             "type": "string"
@@ -2222,6 +2231,62 @@
         "title": "ProfileTier",
         "type": "string"
       },
+      "PromptEnhanceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "negativePrompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negativeprompt"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "PromptEnhanceRequest",
+        "type": "object"
+      },
+      "PromptEnhanceResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "negativePrompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negativeprompt"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "PromptEnhanceResponse",
+        "type": "object"
+      },
       "QueueTier": {
         "enum": [
           "fast",
@@ -2271,6 +2336,38 @@
           "version"
         ],
         "title": "ServiceHealth",
+        "type": "object"
+      },
+      "TitleSummarizeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "TitleSummarizeRequest",
+        "type": "object"
+      },
+      "TitleSummarizeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "TitleSummarizeResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -2358,6 +2455,47 @@
           }
         },
         "summary": "Get Capabilities",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/prompt-enhance": {
+      "post": {
+        "operationId": "prompt_enhance_v1_agent_prompt_enhance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptEnhanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptEnhanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prompt Enhance",
         "tags": [
           "agent"
         ]
@@ -2676,6 +2814,47 @@
           }
         },
         "summary": "List Messages",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/v1/agent/title-summarize": {
+      "post": {
+        "operationId": "title_summarize_v1_agent_title_summarize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitleSummarizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TitleSummarizeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Title Summarize",
         "tags": [
           "agent"
         ]
@@ -3426,6 +3605,49 @@
       }
     },
     "/v1/conversations/{conversation_id}": {
+      "delete": {
+        "operationId": "delete_conversation_v1_conversations__conversation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Oneiroi-User",
+            "required": false,
+            "schema": {
+              "default": "demo-user",
+              "title": "X-Oneiroi-User",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Conversation",
+        "tags": [
+          "conversations"
+        ]
+      },
       "get": {
         "operationId": "get_conversation_v1_conversations__conversation_id__get",
         "parameters": [

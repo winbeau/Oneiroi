@@ -114,6 +114,7 @@ def create_job_router(jobs: JobService) -> APIRouter:
             stored.output_path,
             media_type="video/mp4",
             filename=f"{job_id}.mp4",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
         )
 
     @router.get("/{job_id}/manifest")

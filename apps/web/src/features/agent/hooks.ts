@@ -53,6 +53,42 @@ function draftSnapshot(draft: GenerationDraft) {
   };
 }
 
+export interface PromptEnhanceResult {
+  prompt: string;
+  negativePrompt: string | null;
+}
+
+export function usePromptEnhance() {
+  return useMutation({
+    mutationFn: ({
+      prompt,
+      negativePrompt,
+    }: {
+      prompt: string;
+      negativePrompt?: string | null;
+    }) =>
+      apiRequest<PromptEnhanceResult>("/v1/agent/prompt-enhance", {
+        method: "POST",
+        body: JSON.stringify({ prompt, negativePrompt: negativePrompt ?? null }),
+      }),
+  });
+}
+
+export interface TitleSummarizeResult {
+  title: string;
+}
+
+export function useTitleSummarize() {
+  return useMutation({
+    mutationFn: (prompt: string) =>
+      apiRequest<TitleSummarizeResult>("/v1/agent/title-summarize", {
+        method: "POST",
+        body: JSON.stringify({ prompt }),
+      }),
+    retry: false,
+  });
+}
+
 export function useAgentCapabilities() {
   return useQuery({
     queryKey: agentKeys.capabilities,

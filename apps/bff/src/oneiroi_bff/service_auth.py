@@ -2,6 +2,7 @@ import os
 import stat
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 import jwt
@@ -24,32 +25,48 @@ class ServiceAssertionSigner:
         audience: str,
         key_id: str,
         lifetime_seconds: int = 60,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self.private_key_file = private_key_file
         self.issuer = issuer.strip()
         self.audience = audience.strip()
         self.key_id = key_id.strip()
         self.lifetime_seconds = lifetime_seconds
+        self.clock = clock or time.monotonic
         self._private_key: bytes | None = None
+        # Reused assertions per owner: RSA signing with a large key costs hundreds of
+        # milliseconds, so the token is minted once per owner per validity window.
+        self._assertions: dict[str, tuple[float, str]] = {}
 
     def issue(self, owner_id: str) -> str:
         if self.private_key_file is None or not self.issuer or not self.audience:
             raise ServiceAuthConfigurationError("service assertion signing is not configured")
-        now = int(time.time())
+        now_wall = int(time.time())
+        now = self.clock()
+        cached = self._assertions.get(owner_id)
+        if cached is not None:
+            expires_at, token = cached
+            margin = max(1, min(30, self.lifetime_seconds // 5))
+            if now < expires_at - margin:
+                return token
         headers = {"kid": self.key_id} if self.key_id else None
-        return jwt.encode(
+        token = jwt.encode(
             {
                 "iss": self.issuer,
                 "sub": owner_id,
                 "aud": self.audience,
-                "iat": now,
-                "exp": now + self.lifetime_seconds,
+                "iat": now_wall,
+                "exp": now_wall + self.lifetime_seconds,
                 "jti": uuid.uuid4().hex,
             },
             self._load_private_key(),
             algorithm="RS256",
             headers=headers,
         )
+        if len(self._assertions) >= 256:
+            self._assertions.clear()
+        self._assertions[owner_id] = (now + self.lifetime_seconds, token)
+        return token
 
     def _load_private_key(self) -> bytes:
         if self._private_key is not None:

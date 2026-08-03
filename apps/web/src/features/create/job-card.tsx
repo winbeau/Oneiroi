@@ -48,9 +48,12 @@ const toneClasses = {
 };
 
 const ratioClasses: Record<GenerationDraft["ratio"], string> = {
+  "21:9": "mx-auto aspect-[21/9] max-w-[960px]",
   "16:9": "aspect-video",
-  "9:16": "mx-auto aspect-[9/16] max-h-[680px] max-w-[440px]",
+  "4:3": "mx-auto aspect-[4/3] max-w-[820px]",
   "1:1": "mx-auto aspect-square max-w-[720px]",
+  "3:4": "mx-auto aspect-[3/4] max-h-[680px] max-w-[540px]",
+  "9:16": "mx-auto aspect-[9/16] max-h-[680px] max-w-[440px]",
 };
 
 function timeLabel(value: string) {

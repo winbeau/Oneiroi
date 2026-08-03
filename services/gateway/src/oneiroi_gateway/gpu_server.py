@@ -306,6 +306,8 @@ class GpuServerJobExecutor:
             "numFrames": frames,
             "fps": 24,
             "seed": draft.seed,
+            "quality": draft.profile.value,
+            "duration": int(draft.duration),
             "enhancePrompt": draft.enhance_prompt,
             "firstFrameStrength": draft.first_strength,
             "lastFrameStrength": draft.last_strength,
@@ -409,9 +411,13 @@ def _leases(session_id: str, snapshot: dict[str, Any]) -> list[Lease]:
 
 
 def _dimensions(resolution: str, ratio: str) -> tuple[int, int]:
-    landscape = (1920, 1088) if resolution == "1080p" else (1280, 704)
-    if ratio == "9:16":
-        return landscape[1], landscape[0]
-    if ratio == "1:1":
-        return landscape[1], landscape[1]
-    return landscape
+    if resolution == "1080p":
+        landscape = {"21:9": 2544, "16:9": 1920, "4:3": 1456, "1:1": 1088}
+        height = 1088
+    else:
+        landscape = {"21:9": 1648, "16:9": 1280, "4:3": 944, "1:1": 704}
+        height = 704
+    if ratio in landscape:
+        return landscape[ratio], height
+    portrait = {"3:4": "4:3", "9:16": "16:9"}[ratio]
+    return height, landscape[portrait]

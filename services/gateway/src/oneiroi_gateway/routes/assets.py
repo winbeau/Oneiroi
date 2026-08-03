@@ -7,6 +7,10 @@ from oneiroi_common.studio import AssetResponse
 from oneiroi_gateway.repositories.studio import StudioRepository
 from oneiroi_gateway.services.artifact_service import ArtifactService
 
+# Asset ids are immutable content addresses: once created, the bytes never change,
+# so browsers may cache the file forever and only refresh the list incrementally.
+IMMUTABLE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+
 
 def create_asset_router(
     repository: StudioRepository,
@@ -29,7 +33,11 @@ def create_asset_router(
             asset = await artifacts.get_asset(user, asset_id)
         except KeyError as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
-        return FileResponse(asset.storage_path, media_type=asset.response.media_type)
+        return FileResponse(
+            asset.storage_path,
+            media_type=asset.response.media_type,
+            headers=IMMUTABLE_CACHE_HEADERS,
+        )
 
     @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
     async def delete_asset(
