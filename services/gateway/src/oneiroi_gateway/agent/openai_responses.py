@@ -365,7 +365,6 @@ class OpenAIResponsesProvider:
             "max_output_tokens": request.max_output_tokens,
             "store": False,
             "stream": True,
-            "metadata": {"oneiroi_request_id": request.request_id},
         }
         if tools:
             payload["tools"] = tools
