@@ -42,6 +42,9 @@ class GatewaySettings(BaseSettings):
     gpu_server_request_timeout_seconds: float = Field(default=7_200, gt=0, le=86_400)
     gpu_server_poll_seconds: float = Field(default=0.5, gt=0, le=30)
     gpu_server_mapping_ttl_seconds: int = Field(default=86_400, ge=300, le=604_800)
+    # Accounts may run this many active jobs across conversations; each conversation
+    # is locked to a single active job at a time.
+    job_max_active_per_owner: int = Field(default=4, ge=1, le=16)
     agent_enabled: bool = False
     agent_provider: Literal["openai-responses"] = "openai-responses"
     agent_api_key: SecretStr | None = None

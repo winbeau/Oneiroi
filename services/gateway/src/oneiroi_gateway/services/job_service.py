@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from oneiroi_common.compute import FAST_PROFILE_ID, HQ_PROFILE_ID, ProfileTier
+from oneiroi_common.errors import ErrorCode, OneiroiError
 from oneiroi_common.jobs import JobStatus
 from oneiroi_common.studio import (
     GpuAssignment,
@@ -46,6 +47,7 @@ class JobService:
         dispatcher: JobDispatcher,
         artifacts: ArtifactService,
         executor: JobExecutor | None = None,
+        max_active_per_owner: int = 4,
     ) -> None:
         self.repository = repository
         self.sessions = sessions
@@ -54,6 +56,7 @@ class JobService:
         self.dispatcher = dispatcher
         self.artifacts = artifacts
         self.executor = executor
+        self.max_active_per_owner = max_active_per_owner
         self._conditions: dict[str, asyncio.Condition] = {}
         self._cancel_requested: set[str] = set()
         self._reservations: dict[str, SlotReservation] = {}
@@ -70,6 +73,22 @@ class JobService:
 
     async def create(self, owner_id: str, payload: JobCreate) -> JobResponse:
         await self.repository.get_conversation(owner_id, payload.conversation_id)
+        # One conversation is locked to a single active job at a time.
+        active_in_conversation = await self.repository.count_active_jobs(
+            owner_id, conversation_id=payload.conversation_id
+        )
+        if active_in_conversation > 0:
+            raise OneiroiError(
+                ErrorCode.CONVERSATION_BUSY,
+                "当前会话已有任务在生成，请等待完成后重试",
+            )
+        # An account may run at most max_active_per_owner jobs concurrently.
+        active_total = await self.repository.count_active_jobs(owner_id)
+        if active_total >= self.max_active_per_owner:
+            raise OneiroiError(
+                ErrorCode.CONCURRENCY_LIMIT,
+                f"账户并发任务已达上限（{self.max_active_per_owner} 个），请等待任一任务完成后重试",
+            )
         session = self.sessions.get(owner_id, payload.compute_session_id)
         self.capabilities.require_profile(session, payload.draft.profile)
         input_paths = await self._input_paths(owner_id, payload)

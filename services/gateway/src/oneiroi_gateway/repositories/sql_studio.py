@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from oneiroi_common.jobs import JobStatus
@@ -237,6 +237,23 @@ class SqlStudioRepository:
                 await session.scalars(select(JobModel).where(JobModel.state.not_in(terminal)))
             ).all()
         return [self._stored_job(row) for row in rows]
+
+    async def count_active_jobs(
+        self, owner_id: str, conversation_id: str | None = None
+    ) -> int:
+        terminal = [
+            JobStatus.SUCCEEDED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+        ]
+        async with self.sessions() as session:
+            query = select(func.count()).select_from(JobModel).where(
+                JobModel.owner_id == owner_id,
+                JobModel.state.not_in(terminal),
+            )
+            if conversation_id is not None:
+                query = query.where(JobModel.conversation_id == conversation_id)
+            return int((await session.scalar(query)) or 0)
 
     async def get_job(self, owner_id: str, job_id: str) -> StoredJob:
         async with self.sessions() as session:

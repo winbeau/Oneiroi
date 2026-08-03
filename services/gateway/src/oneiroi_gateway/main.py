@@ -301,6 +301,7 @@ def create_app(
             job_dispatcher,
             artifacts,
             job_executor,
+            max_active_per_owner=app_settings.job_max_active_per_owner,
         )
     heartbeat_monitor = (
         RunnerHeartbeatMonitor(

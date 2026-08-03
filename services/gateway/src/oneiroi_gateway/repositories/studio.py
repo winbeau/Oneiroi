@@ -88,6 +88,10 @@ class StudioRepository(Protocol):
 
     async def list_incomplete_jobs(self) -> list[StoredJob]: ...
 
+    async def count_active_jobs(
+        self, owner_id: str, conversation_id: str | None = None
+    ) -> int: ...
+
     async def get_job(self, owner_id: str, job_id: str) -> StoredJob: ...
 
     async def update_job(self, job: StoredJob) -> JobResponse: ...
@@ -230,6 +234,17 @@ class InMemoryStudioRepository:
 
     async def list_incomplete_jobs(self) -> list[StoredJob]:
         return [job for job in self.jobs.values() if not job.response.stage.is_terminal]
+
+    async def count_active_jobs(
+        self, owner_id: str, conversation_id: str | None = None
+    ) -> int:
+        return sum(
+            1
+            for job in self.jobs.values()
+            if job.owner_id == owner_id
+            and not job.response.stage.is_terminal
+            and (conversation_id is None or job.response.conversation_id == conversation_id)
+        )
 
     async def get_job(self, owner_id: str, job_id: str) -> StoredJob:
         job = self.jobs.get(job_id)

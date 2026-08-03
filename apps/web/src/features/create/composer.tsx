@@ -162,8 +162,13 @@ export function Composer() {
   const upload = useUploadImage();
   const jobsQuery = useJobs();
   const jobs = jobsQuery.data ?? [];
+  // Lock only the active conversation: one conversation runs one job at a time,
+  // while other/new conversations may keep submitting (account cap enforced
+  // server-side at job_max_active_per_owner).
   const generating = jobs.some(
-    (job) => !["succeeded", "failed", "cancelled"].includes(job.stage),
+    (job) =>
+      job.conversationId === activeConversationId &&
+      !["succeeded", "failed", "cancelled"].includes(job.stage),
   );
   const enhancePrompt = usePromptEnhance();
   const summarizeTitle = useTitleSummarize();
