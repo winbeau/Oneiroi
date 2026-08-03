@@ -77,6 +77,11 @@ while (($#)); do
 done
 
 [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT >= 1 && PORT <= 65535)) || fail "invalid port: $PORT"
+
+# The systemd user units run node from the nvm tree; expose it for the build step.
+if ! command -v node >/dev/null 2>&1 && [[ -d "$HOME/.nvm/versions/node" ]]; then
+    export PATH="$(ls -d "$HOME/.nvm/versions/node"/v*/bin 2>/dev/null | sort -V | tail -n 1):$PATH"
+fi
 for command_name in curl git install ip node pnpm systemctl; do
     command -v "$command_name" >/dev/null 2>&1 || fail "required command is missing: $command_name"
 done
