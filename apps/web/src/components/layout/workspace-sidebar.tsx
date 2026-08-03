@@ -377,7 +377,7 @@ export function WorkspaceSidebar() {
                   取消
                 </Button>
                 <Button
-                  className="bg-[var(--color-danger)] text-white shadow-sm hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/30"
+                  className="bg-[var(--color-danger)] text-white shadow-sm hover:bg-[var(--color-danger)] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/30"
                   disabled={deleteConversation.isPending}
                   onClick={confirmDelete}
                   size="md"
