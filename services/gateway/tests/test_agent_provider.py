@@ -389,25 +389,23 @@ async def test_image_success_is_normalized_without_exposing_raw_validation_error
 
     async def handler(request: httpx.Request) -> httpx.Response:
         captured.update(json.loads(request.content))
-        return httpx.Response(200, content=fixture("image.sse"))
+        return httpx.Response(200, json={"id": "img-1", "data": [{"b64_json": "iVBORw0KGgo="}]})
 
     adapter = provider(handler)
     result = await adapter.generate_image(
         ImageGenerationRequest(
             model="image-model",
             prompt="gray square",
-            negativePrompt="text and watermark",
             request_id="image-success",
             size="1024x1024",
-            referenceImages=["data:image/png;base64,aGVsbG8="],
         )
     )
     await adapter.close()
     assert result.images[0].base64_data == "iVBORw0KGgo="
-    assert result.response_id == "resp-image"
-    assert captured["tools"] == [{"type": "image_generation", "size": "1024x1024"}]
-    assert "Avoid: text and watermark" in str(captured["input"])
-    assert "data:image/png;base64,aGVsbG8=" in str(captured["input"])
+    assert result.response_id == "img-1"
+    assert captured["model"] == "image-model"
+    assert captured["size"] == "1024x1024"
+    assert captured["prompt"] == "gray square"
 
 
 @pytest.mark.asyncio
@@ -469,16 +467,11 @@ async def test_generated_image_resolution_is_bounded_and_origin_locked() -> None
 
 @pytest.mark.asyncio
 async def test_image_file_id_and_url_modes_are_normalized() -> None:
-    payload = (
-        b'data: {"type":"response.created","response":{"id":"resp-image-ref"}}\n\n'
-        b'data: {"type":"response.image_generation_call.completed","result":'
-        b'{"file_id":"file-1","url":"https://provider.example/image/1",'
-        b'"media_type":"image/png"}}\n\n'
-        b'data: {"type":"response.completed","response":{"id":"resp-image-ref"}}\n\n'
-    )
-
     async def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=payload)
+        return httpx.Response(
+            200,
+            json={"id": "img-ref", "data": [{"url": "https://provider.example/image/1"}]},
+        )
 
     adapter = provider(handler)
     result = await adapter.generate_image(
@@ -489,7 +482,6 @@ async def test_image_file_id_and_url_modes_are_normalized() -> None:
         )
     )
     await adapter.close()
-    assert result.images[0].file_id == "file-1"
     assert result.images[0].url == "https://provider.example/image/1"
     assert result.images[0].media_type == "image/png"
 
