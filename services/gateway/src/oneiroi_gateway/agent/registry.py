@@ -100,7 +100,7 @@ class ProposeDraftPatchResult(ProposeDraftPatchArguments):
 
 
 class GenerateReferenceImageArguments(ContractModel):
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
     negative_prompt: Annotated[str | None, Field(default=None, max_length=2_000)]
     purpose: Literal["first-frame", "last-frame", "style-reference"]
     ratio: Literal["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] = "16:9"

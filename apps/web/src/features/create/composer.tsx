@@ -243,8 +243,6 @@ export function Composer() {
     }
   };
 
-  const modeLabel = draft.lastFrame ? "首尾帧过渡" : "首帧动画";
-
   const runEnhance = () => {
     if (generating) return;
     setError("");
@@ -253,8 +251,8 @@ export function Composer() {
       {
         onSuccess: (result) => {
           updateDraft({
-            prompt: result.prompt,
-            negativePrompt: result.negativePrompt ?? "",
+            prompt: result.prompt.slice(0, 50_000),
+            negativePrompt: (result.negativePrompt ?? "").slice(0, 50_000),
             enhancePrompt: false,
           });
           setEnhancedFlash(true);
@@ -352,22 +350,20 @@ export function Composer() {
               onClear={() => updateDraft({ lastFrame: null })}
               reference={draft.lastFrame}
             />
-            <span className="pointer-events-none absolute bottom-0.5 right-1 z-20 rounded-full bg-black/45 px-1.5 py-0.5 text-[8px] font-medium text-white">
-              {modeLabel}
-            </span>
           </div>
           <label className="relative min-w-0 flex-1 rounded-[7px] bg-[var(--color-canvas)]/72 px-3 pb-7 pt-2.5 ring-1 ring-inset ring-[var(--color-border)]">
             <span className="sr-only">生成提示词</span>
             <textarea
               className="min-h-[94px] w-full resize-none bg-transparent text-sm leading-6 outline-none"
               disabled={generating}
+              maxLength={50_000}
               onChange={(event) => updateDraft({ prompt: event.target.value })}
               placeholder="描述主体动作、镜头变化、光线与声音……"
               rows={3}
               value={draft.prompt}
             />
             <span className="absolute bottom-2.5 right-3 text-[9px] text-[var(--color-text-faint)]">
-              {draft.prompt.length} / 4000
+              {draft.prompt.length} / 50000
             </span>
           </label>
         </div>

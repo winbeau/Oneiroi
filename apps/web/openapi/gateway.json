@@ -1434,7 +1434,7 @@
           "negativePrompt": {
             "anyOf": [
               {
-                "maxLength": 4000,
+                "maxLength": 50000,
                 "type": "string"
               },
               {
@@ -1446,7 +1446,7 @@
           "prompt": {
             "anyOf": [
               {
-                "maxLength": 4000,
+                "maxLength": 50000,
                 "minLength": 1,
                 "type": "string"
               },
@@ -1675,7 +1675,7 @@
             "default": "fast"
           },
           "prompt": {
-            "maxLength": 4000,
+            "maxLength": 50000,
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
@@ -2237,7 +2237,7 @@
           "negativePrompt": {
             "anyOf": [
               {
-                "maxLength": 4000,
+                "maxLength": 50000,
                 "type": "string"
               },
               {
@@ -2247,7 +2247,7 @@
             "title": "Negativeprompt"
           },
           "prompt": {
-            "maxLength": 4000,
+            "maxLength": 50000,
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
@@ -2265,7 +2265,7 @@
           "negativePrompt": {
             "anyOf": [
               {
-                "maxLength": 4000,
+                "maxLength": 50000,
                 "type": "string"
               },
               {
@@ -2275,7 +2275,7 @@
             "title": "Negativeprompt"
           },
           "prompt": {
-            "maxLength": 4000,
+            "maxLength": 50000,
             "minLength": 1,
             "title": "Prompt",
             "type": "string"
@@ -2342,7 +2342,7 @@
         "additionalProperties": false,
         "properties": {
           "prompt": {
-            "maxLength": 4000,
+            "maxLength": 50000,
             "minLength": 1,
             "title": "Prompt",
             "type": "string"

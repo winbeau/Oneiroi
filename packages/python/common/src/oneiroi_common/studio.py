@@ -53,7 +53,7 @@ class AssetResponse(ContractModel):
 
 class GenerationDraft(ContractModel):
     mode: Literal["I2V"] = "I2V"
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
     negative_prompt: str = ""
     queue: QueueTier = QueueTier.FAST
     profile: ProfileTier = ProfileTier.FAST

@@ -8,7 +8,7 @@ from oneiroi_common.compute import ContractModel, ProfileTier
 
 class InternalI2VRequest(ContractModel):
     job_id: str
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
     negative_prompt: str = ""
     profile: ProfileTier = ProfileTier.FAST
     width: Annotated[int, Field(default=768, ge=64)]

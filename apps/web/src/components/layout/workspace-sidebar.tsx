@@ -320,18 +320,18 @@ export function WorkspaceSidebar() {
         }}
         open={pendingRename !== null || pendingDelete !== null}
       >
-        <DialogContent className="max-w-sm p-5">
+        <DialogContent className="max-w-sm p-6">
           {pendingRename ? (
             <>
-              <DialogTitle className="text-sm font-semibold text-[var(--color-text)]">
+              <DialogTitle className="text-base font-semibold text-[var(--color-text)]">
                 重命名会话
               </DialogTitle>
-              <DialogDescription className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">
+              <DialogDescription className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
                 为「{pendingRename.title}」设置新名称。
               </DialogDescription>
               <input
                 autoFocus
-                className="mt-3 h-9 w-full rounded-md border border-[var(--color-border-strong)] bg-white/90 px-2.5 text-sm outline-none focus:border-[var(--color-accent)]/40 focus:ring-2 focus:ring-[var(--color-accent)]/15"
+                className="mt-3 h-10 w-full rounded-md border border-[var(--color-border-strong)] bg-white/90 px-3 text-sm outline-none focus:border-[var(--color-accent)]/40 focus:ring-2 focus:ring-[var(--color-accent)]/15"
                 maxLength={100}
                 onChange={(event) => setRenameValue(event.target.value)}
                 onKeyDown={(event) => {
@@ -339,11 +339,11 @@ export function WorkspaceSidebar() {
                 }}
                 value={renameValue}
               />
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-5 flex justify-end gap-2">
                 <Button
                   disabled={renameConversation.isPending}
                   onClick={() => setPendingRename(null)}
-                  size="sm"
+                  size="md"
                   variant="ghost"
                 >
                   取消
@@ -353,7 +353,7 @@ export function WorkspaceSidebar() {
                     renameConversation.isPending || !renameValue.trim()
                   }
                   onClick={confirmRename}
-                  size="sm"
+                  size="md"
                 >
                   {renameConversation.isPending ? "保存中…" : "保存"}
                 </Button>
@@ -361,26 +361,26 @@ export function WorkspaceSidebar() {
             </>
           ) : (
             <>
-              <DialogTitle className="text-sm font-semibold text-[var(--color-text)]">
+              <DialogTitle className="text-base font-semibold text-[var(--color-text)]">
                 删除会话
               </DialogTitle>
-              <DialogDescription className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">
+              <DialogDescription className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">
                 将删除「{pendingDelete?.title ?? ""}」及其全部生成视频与参考图片资产，且不可恢复。
               </DialogDescription>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-5 flex justify-end gap-2">
                 <Button
                   disabled={deleteConversation.isPending}
                   onClick={() => setPendingDelete(null)}
-                  size="sm"
+                  size="md"
                   variant="ghost"
                 >
                   取消
                 </Button>
                 <Button
-                  className="bg-[rgb(184_74_74_/_90%)] text-white hover:bg-[rgb(184_74_74)]"
+                  className="bg-[var(--color-danger)] text-white shadow-sm hover:brightness-110 focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/30"
                   disabled={deleteConversation.isPending}
                   onClick={confirmDelete}
-                  size="sm"
+                  size="md"
                 >
                   {deleteConversation.isPending ? "删除中…" : "确认删除"}
                 </Button>

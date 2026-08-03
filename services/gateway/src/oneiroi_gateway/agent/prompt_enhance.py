@@ -14,12 +14,12 @@ generation prompt, return exactly one JSON object with two keys:
 - "prompt": an improved prompt (keep the user's language when it is clearly intentional)
 that preserves the subject and intent, and adds concrete visual detail, camera motion,
 lighting, pacing, and a clear sense of temporal progression suitable for a 1-15 second
-clip. Keep it under 4000 characters.
+clip. Keep it under 50000 characters.
 - "negativePrompt": a concise comma-separated list of artifacts to avoid (flicker, warping,
 identity drift, deformed hands, etc.). Empty string when nothing applies.
 Do not add markdown fences, explanations, or any text outside the JSON object."""
 
-ENHANCE_MAX_OUTPUT_TOKENS = 1_200
+ENHANCE_MAX_OUTPUT_TOKENS = 4_096
 
 TITLE_INSTRUCTIONS = """You name a video-creation conversation. Given the user's first prompt,
 return exactly one JSON object with one key:
@@ -33,25 +33,25 @@ TITLE_MAX_OUTPUT_TOKENS = 64
 class PromptEnhanceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
     negative_prompt: Annotated[
-        str | None, Field(default=None, max_length=4_000, alias="negativePrompt")
+        str | None, Field(default=None, max_length=50_000, alias="negativePrompt")
     ] = None
 
 
 class PromptEnhanceResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
     negative_prompt: Annotated[
-        str | None, Field(default=None, max_length=4_000, alias="negativePrompt")
+        str | None, Field(default=None, max_length=50_000, alias="negativePrompt")
     ] = None
 
 
 class TitleSummarizeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
 
 
 class TitleSummarizeResponse(BaseModel):
@@ -102,7 +102,9 @@ class PromptEnhancer:
         }
         try:
             async with httpx.AsyncClient(
-                transport=self._transport, timeout=self.timeout_seconds
+                transport=self._transport,
+                timeout=self.timeout_seconds,
+                trust_env=False,
             ) as client:
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
@@ -143,7 +145,9 @@ class PromptEnhancer:
         }
         try:
             async with httpx.AsyncClient(
-                transport=self._transport, timeout=self.timeout_seconds
+                transport=self._transport,
+                timeout=self.timeout_seconds,
+                trust_env=False,
             ) as client:
                 response = await client.post(
                     f"{self.base_url}/chat/completions",

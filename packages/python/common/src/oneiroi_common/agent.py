@@ -132,8 +132,8 @@ class AgentApprovalStatus(StrEnum):
 
 
 class DraftProposal(ContractModel):
-    prompt: Annotated[str | None, Field(default=None, min_length=1, max_length=4_000)]
-    negative_prompt: Annotated[str | None, Field(default=None, max_length=4_000)]
+    prompt: Annotated[str | None, Field(default=None, min_length=1, max_length=50_000)]
+    negative_prompt: Annotated[str | None, Field(default=None, max_length=50_000)]
     ratio: Literal["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] | None = None
     resolution: Literal["720p", "1080p"] | None = None
     duration: Annotated[int | None, Field(default=None, ge=1, le=15)]

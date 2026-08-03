@@ -27,8 +27,8 @@ export function DialogContent({
       >
         {children}
         <DialogPrimitive.Close
-          aria-label="关闭预览"
-          className="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          aria-label="关闭"
+          className="absolute right-4 top-4 grid size-7 place-items-center rounded text-[var(--color-text-muted)] transition hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/30"
         >
           <X aria-hidden="true" className="size-4" />
         </DialogPrimitive.Close>

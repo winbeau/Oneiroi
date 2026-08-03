@@ -103,7 +103,7 @@ class ImageGenerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     model: Annotated[str, Field(min_length=1, max_length=200)]
-    prompt: Annotated[str, Field(min_length=1, max_length=4_000)]
+    prompt: Annotated[str, Field(min_length=1, max_length=50_000)]
     request_id: Annotated[str, Field(min_length=1, max_length=128)]
     size: Annotated[str | None, Field(default=None, max_length=40)]
     quality: Annotated[str | None, Field(default=None, max_length=40)]
