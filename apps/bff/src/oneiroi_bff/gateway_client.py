@@ -20,7 +20,13 @@ class GatewayClient:
                 base_url=str(self.settings.gateway_base_url).rstrip("/"),
                 timeout=self.settings.request_timeout_seconds,
                 trust_env=False,
-                limits=httpx.Limits(max_connections=64, max_keepalive_connections=32),
+                limits=httpx.Limits(
+                    max_connections=64,
+                    max_keepalive_connections=32,
+                    # Keep the tunnel TCP connection alive for minutes so the first
+                    # request does not repeatedly pay the proxy/Tunnel handshake cost.
+                    keepalive_expiry=300,
+                ),
             )
         return self._pool
 
